@@ -1,4 +1,4 @@
-<!-- Thanks for contributing to free-code! Keep the diff focused. -->
+<!-- Thanks for contributing to fexor-code! Keep the diff focused. -->
 
 ## What & why
 

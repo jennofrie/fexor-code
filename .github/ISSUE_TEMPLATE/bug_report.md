@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something in free-code isn't working
+about: Something in fexor-code isn't working
 title: "[bug] "
 labels: bug
 ---
@@ -17,7 +17,7 @@ A clear description of what went wrong.
 What you expected to happen.
 
 **Environment**
-- free-code version: `./cli-dev --version`
+- fexor-code version: `./cli-dev --version`
 - Bun version: `bun --version`
 - OS / arch:
 - Provider / launcher (if relevant): e.g. `launch-gpt.sh`, `launch.sh`

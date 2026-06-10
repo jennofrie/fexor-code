@@ -19,7 +19,7 @@ beforeEach(() => {
     savedEnv.set(key, process.env[key])
     delete process.env[key]
   }
-  configDir = mkdtempSync(join(tmpdir(), 'free-code-codex-'))
+  configDir = mkdtempSync(join(tmpdir(), 'fexor-code-codex-'))
   process.env.CLAUDE_CONFIG_DIR = configDir
 })
 

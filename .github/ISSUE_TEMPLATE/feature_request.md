@@ -9,7 +9,7 @@ labels: enhancement
 If it's a feature flag from [FEATURES.md](../../FEATURES.md), name it (e.g. `DIRECT_CONNECT`).
 
 **Why is it valuable?**
-What does it enable for users of free-code?
+What does it enable for users of fexor-code?
 
 **Reconstruction notes (if known)**
 - Missing file(s):

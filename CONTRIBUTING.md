@@ -1,4 +1,4 @@
-# Contributing to free-code
+# Contributing to Fexor Code
 
 Thanks for your interest. The highest-value contributions right now are
 **reconstructing broken feature flags** and improving provider fidelity.
@@ -6,8 +6,8 @@ Thanks for your interest. The highest-value contributions right now are
 ## Getting set up
 
 ```bash
-git clone https://github.com/jennofrie/free-code.git
-cd free-code
+git clone https://github.com/jennofrie/fexor-code.git
+cd fexor-code
 bun install
 bun run build:dev:full   # → ./cli-dev (all experimental flags)
 ./cli-dev --version

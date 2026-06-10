@@ -1,6 +1,6 @@
 # Architecture
 
-A map of how `free-code` is put together — the boot path, the compile-time
+A map of how `fexor-code` is put together — the boot path, the compile-time
 feature-flag system, the streaming agent loop, and how a request is routed and
 sized per provider.
 
@@ -62,7 +62,7 @@ flowchart LR
 
 ## Model & provider resolution
 
-`free-code` always speaks Anthropic Messages internally. The **provider** is
+`fexor-code` always speaks Anthropic Messages internally. The **provider** is
 decided only by `CLAUDE_CODE_USE_*` env vars (not by `ANTHROPIC_BASE_URL`), which
 has important consequences for third-party endpoints.
 

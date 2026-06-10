@@ -170,7 +170,7 @@ const defines = {
     'This reconstructed source snapshot does not include Anthropic internal issue routing.',
   ),
   'MACRO.VERSION_CHANGELOG': JSON.stringify(
-    dev ? getVersionChangelog() : 'https://github.com/jennofrie/free-code',
+    dev ? getVersionChangelog() : 'https://github.com/jennofrie/fexor-code',
   ),
 } as const
 

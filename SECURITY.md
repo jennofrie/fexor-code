@@ -2,11 +2,11 @@
 
 ## Reporting a vulnerability
 
-If you discover a security issue in `free-code` — a vulnerability in the CLI, a
+If you discover a security issue in `fexor-code` — a vulnerability in the CLI, a
 leaked secret in git history, or a supply-chain concern — please report it
 **privately** rather than opening a public issue:
 
-- Open a [GitHub Security Advisory](https://github.com/jennofrie/free-code/security/advisories/new) (preferred), or
+- Open a [GitHub Security Advisory](https://github.com/jennofrie/fexor-code/security/advisories/new) (preferred), or
 - Contact the maintainer (**Profexor**) through the repository's contact channels.
 
 Please include reproduction steps and the affected version/commit. You'll get an
@@ -14,7 +14,7 @@ acknowledgement as soon as practical; coordinated disclosure is appreciated.
 
 ## Scope
 
-`free-code` is a source-available fork of Claude Code for local/terminal use.
+`fexor-code` is a source-available fork of Claude Code for local/terminal use.
 In scope: the CLI build, the reconstructed feature-flag code, the provider
 launchers, and anything that could leak credentials or execute unintended code.
 
@@ -35,7 +35,7 @@ applies to the repository:
 
 ## Safe-use note
 
-`free-code` removes the CLI's prompt-level guardrails. The model's own safety
+`fexor-code` removes the CLI's prompt-level guardrails. The model's own safety
 training still applies, but you are responsible for how you operate the agent —
 especially with broad permissions, auto-approval modes, or untrusted MCP
 servers. Review permission settings before running unattended.

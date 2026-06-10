@@ -341,7 +341,7 @@ export function getDefaultEffortForModel(
   // the model launch DRI and research. Default effort is a sensitive setting
   // that can greatly affect model quality and bashing.
 
-  // free-code default: Opus 4.5 rejects max effort and supports high as its
+  // fexor-code default: Opus 4.5 rejects max effort and supports high as its
   // highest public effort level.
   if (model.toLowerCase().includes('opus-4-5')) {
     return 'high'

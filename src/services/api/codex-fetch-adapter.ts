@@ -369,7 +369,7 @@ function translateToolChoice(toolChoice: unknown): string {
 function buildPromptCacheKey(): string {
   const explicit = process.env.CLAUDE_CODE_GPT_PROMPT_CACHE_KEY
   if (explicit) return explicit
-  return `free-code:${process.cwd()}`
+  return `fexor-code:${process.cwd()}`
 }
 
 function shouldInterceptMessagesUrl(url: string): boolean {
@@ -533,7 +533,7 @@ function translateToCodexBody(anthropicBody: Record<string, unknown>): {
     include: [],
     prompt_cache_key: buildPromptCacheKey(),
     client_metadata: {
-      originator: 'free-code',
+      originator: 'fexor-code',
     },
     text: { verbosity: resolveVerbosity() },
   }

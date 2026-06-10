@@ -19,9 +19,9 @@ DEFAULT_OPUS_EFFORT="high"
 DEFAULT_SONNET_EFFORT="max"
 # Voice (/voice): works here via claude.ai OAuth + SoX (brew install sox). The
 # /voice toggle lives in USER settings, which this OAuth-clean launcher does not
-# load by default. Launch with FREECODE_VOICE=1 to load user settings so the
+# load by default. Launch with FEXOR_VOICE=1 to load user settings so the
 # toggle persists; then run /voice and hold Space to talk.
-DEFAULT_SETTING_SOURCES="${FREECODE_VOICE:+user}"
+DEFAULT_SETTING_SOURCES="${FEXOR_VOICE:+user}"
 
 has_arg() {
   local needle="$1"

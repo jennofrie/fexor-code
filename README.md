@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="assets/screenshot.png" alt="free-code" width="760" />
+<img src="assets/fexor.png" alt="Fexor Code" width="760" />
 
-# free-code
+# Fexor Code
 
 ### The free build of Claude Code — telemetry stripped, guardrails removed, experimental features unlocked & **reconstructed**.
 
@@ -27,7 +27,7 @@
 
 ## ✨ What is this
 
-A clean, buildable fork of Anthropic's [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI — the terminal-native AI coding agent. The upstream source became publicly available on **March 31, 2026** through a source-map exposure in the npm distribution. `free-code` applies four categories of work on top of that snapshot:
+A clean, buildable fork of Anthropic's [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI — the terminal-native AI coding agent. The upstream source became publicly available on **March 31, 2026** through a source-map exposure in the npm distribution. `fexor-code` applies four categories of work on top of that snapshot:
 
 | | Category | What it means |
 |:--:|---|---|
@@ -37,7 +37,7 @@ A clean, buildable fork of Anthropic's [Claude Code](https://docs.anthropic.com/
 | 🧩 | **Missing features reconstructed** | The leaked snapshot was missing source files for dozens of flags. **13 of them have been rebuilt** to their original call-site contracts and verified to compile + boot. → [Reconstruction status](#-reconstruction-status) |
 
 > [!NOTE]
-> `free-code` is a **nominative fork** — it references "Claude Code" only to describe what it forks. It is maintained independently by **Profexor** and is not affiliated with or endorsed by Anthropic.
+> `fexor-code` is a **nominative fork** — it references "Claude Code" only to describe what it forks. It is maintained independently by **Profexor** and is not affiliated with or endorsed by Anthropic.
 
 ---
 
@@ -140,11 +140,11 @@ Full audit of all 88 flags → **[FEATURES.md](FEATURES.md)**.
 
 ## 🌐 Model providers
 
-`free-code` speaks the Anthropic Messages format internally and routes it to **seven** backends. Third-party Anthropic-compatible endpoints pass through natively; OpenAI/Codex goes through a translation adapter.
+`fexor-code` speaks the Anthropic Messages format internally and routes it to **seven** backends. Third-party Anthropic-compatible endpoints pass through natively; OpenAI/Codex goes through a translation adapter.
 
 ```mermaid
 flowchart LR
-    APP["free-code<br/><sub>Anthropic Messages</sub>"]
+    APP["Fexor Code<br/><sub>Anthropic Messages</sub>"]
     APP --> ANT["Anthropic API / claude.ai<br/><sub>Opus 4.8 · 1M</sub>"]
     APP --> CODEX["OpenAI Codex adapter<br/><sub>GPT-5.5 / 5.4</sub>"]
     APP --> BR["AWS Bedrock"]
@@ -161,7 +161,7 @@ Each provider has a dedicated, **tuned** launcher that maximizes its context win
 
 | Launcher | Model | Context window | Highlights |
 |---|---|---:|---|
-| `freecode-launch.sh` | Claude Opus 4.8 `[1m]` | **1M** | native subscription, adaptive thinking, 128K output |
+| `fexor-launch.sh` | Claude Opus 4.8 `[1m]` | **1M** | native subscription, adaptive thinking, 128K output |
 | `launch-claude-opus45.sh` | Claude Opus 4.8 `[1m]` | **1M** | OAuth-clean, `/model` picker entry |
 | `launch-gpt.sh` | GPT-5.5 (or 5.4) | 400K–1.05M | Codex adapter, `xhigh` reasoning, verbosity `medium` |
 | `launch.sh` | DeepSeek V4-Pro | **1M** | beta-strip for 3P fidelity, 64K output |
@@ -187,16 +187,16 @@ Each provider has a dedicated, **tuned** launcher that maximizes its context win
 ## ⚡ Quick install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jennofrie/free-code/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jennofrie/fexor-code/main/install.sh | bash
 ```
 
-Checks your system, installs Bun if needed, clones the repo, builds with the full feature set, and symlinks `free-code` onto your `PATH`. Then run `free-code` and `/login`.
+Checks your system, installs Bun if needed, clones the repo, builds with the full feature set, and symlinks `fexor-code` onto your `PATH`. Then run `fexor-code` and `/login`.
 
 ## 🔨 Build
 
 ```bash
-git clone https://github.com/jennofrie/free-code.git
-cd free-code
+git clone https://github.com/jennofrie/fexor-code.git
+cd fexor-code
 bun install
 bun run build      # → ./cli       (stable)
 bun run build:dev:full   # → ./cli-dev (all experimental flags)
@@ -232,11 +232,11 @@ bun run build:dev:full   # → ./cli-dev (all experimental flags)
 
 | Launcher / binary | `/voice` |
 |---|---|
-| `freecode-launch.sh`, `launch-claude-opus45.sh` | ✅ launch with `FREECODE_VOICE=1` |
+| `fexor-launch.sh`, `launch-claude-opus45.sh` | ✅ launch with `FEXOR_VOICE=1` |
 | `cli` / `cli-dev` after `/login` to claude.ai | ✅ |
 | `launch.sh` (DeepSeek), `launch-qwen37.sh` (Qwen), `launch-gpt.sh` (GPT) | ❌ transcription is claude.ai-only |
 
-**To use it:** `brew install sox`, then `FREECODE_VOICE=1 ./freecode-launch.sh`, `/login` to your claude.ai account, run `/voice`, and hold **Space** to talk. The `FREECODE_VOICE=1` flag loads user settings so the toggle persists — the Claude launchers are OAuth-clean and don't load them by default.
+**To use it:** `brew install sox`, then `FEXOR_VOICE=1 ./fexor-launch.sh`, `/login` to your claude.ai account, run `/voice`, and hold **Space** to talk. The `FEXOR_VOICE=1` flag loads user settings so the toggle persists — the Claude launchers are OAuth-clean and don't load them by default.
 
 ## 🗂️ Project structure
 
@@ -299,7 +299,7 @@ See **[CHANGELOG.md](CHANGELOG.md)** for the full history, including the audit, 
 
 Built and maintained by **Profexor**.
 
-> The original Claude Code source is the property of Anthropic. This fork exists because the source was publicly exposed through Anthropic's own npm distribution; it is referenced nominatively to describe what `free-code` is. Use at your own discretion.
+> The original Claude Code source is the property of Anthropic. This fork exists because the source was publicly exposed through Anthropic's own npm distribution; it is referenced nominatively to describe what `fexor-code` is. Use at your own discretion.
 
 ## 📄 License
 

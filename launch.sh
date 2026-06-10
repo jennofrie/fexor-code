@@ -1,6 +1,6 @@
 #!/bin/zsh
-# free-code isolated launcher — powered by DeepSeek V4-Pro with thinking
-# Runs free-code with its own config directory, completely separate from
+# fexor-code isolated launcher — powered by DeepSeek V4-Pro with thinking
+# Runs fexor-code with its own config directory, completely separate from
 # the official Claude Code CLI (~/.claude/).
 #
 # Usage:
@@ -9,16 +9,16 @@
 #   ./launch.sh --model deepseek-v4-pro  # specify model
 #
 # To add a shell alias:
-#   echo 'alias freecode="~/Desktop/Github/free-code-main/launch.sh"' >> ~/.zshrc
+#   echo 'alias fexor="~/Desktop/Github/fexor-code-main/launch.sh"' >> ~/.zshrc
 
-export CLAUDE_CONFIG_DIR="$HOME/.free-code"
+export CLAUDE_CONFIG_DIR="$HOME/.fexor-code"
 
 # ── Load API key (gitignored) ─────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [[ -f "$SCRIPT_DIR/.env.deepseek" ]]; then
   source "$SCRIPT_DIR/.env.deepseek"
 fi
-# Hard override — ensures any stale stored key in ~/.free-code/ cannot win
+# Hard override — ensures any stale stored key in ~/.fexor-code/ cannot win
 export ANTHROPIC_AUTH_TOKEN
 
 # ── DeepSeek V4 — Anthropic-compatible endpoint ───────────────────────────────
@@ -46,11 +46,11 @@ export ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES="thinking,adaptive_
 export MAX_THINKING_TOKENS=16000
 
 # ── Maximize the token window (DeepSeek V4-Pro = native 1M context) ──────────
-# Without this, free-code budgets an unknown model at only 200K and auto-compacts
+# Without this, fexor-code budgets an unknown model at only 200K and auto-compacts
 # ~5x too early. CLAUDE_CODE_MAX_CONTEXT_TOKENS is a client-side budgeting value
 # (never sent to the API) and is honored in external builds after the un-gate patch.
 export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000
-# Raise the per-turn output ceiling to free-code's max for an unknown model (64K).
+# Raise the per-turn output ceiling to fexor-code's max for an unknown model (64K).
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000
 
 # ── 3rd-party fidelity: strip Anthropic-only betas + experimental tool fields ─
@@ -72,6 +72,6 @@ export CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1
 # Not available on this provider. Speech-to-text uses Anthropic's claude.ai
 # voice_stream endpoint (OAuth-gated), so /voice is hidden for API-key providers
 # like DeepSeek. Recording (SoX) works, but transcription is claude.ai-only —
-# use freecode-launch.sh / launch-claude-opus45.sh for voice.
+# use fexor-launch.sh / launch-claude-opus45.sh for voice.
 
 exec "$SCRIPT_DIR/cli-dev" "$@"

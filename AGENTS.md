@@ -1,4 +1,4 @@
-# AGENTS.md — free-code workspace guide
+# AGENTS.md — Fexor Code workspace guide
 
 Instructions for coding agents (Codex / GPT, Kimi CLI, and other non-Claude
 agents) working in this repository. This mirrors [CLAUDE.md](CLAUDE.md); for
@@ -6,7 +6,7 @@ humans, start with [README.md](README.md).
 
 ## What this repo is
 
-`free-code` is a clean, buildable Bun/TypeScript fork of Anthropic's Claude Code
+`fexor-code` is a clean, buildable Bun/TypeScript fork of Anthropic's Claude Code
 CLI, reconstructed from the publicly-exposed source snapshot — telemetry
 stripped, prompt-level guardrails removed, experimental feature flags unlocked,
 and **13 previously-broken flags reconstructed**. See [README.md](README.md) and

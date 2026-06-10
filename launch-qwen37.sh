@@ -1,9 +1,9 @@
 #!/bin/zsh
-# free-code Qwen 3.7 Max launcher — Anthropic Messages -> Alibaba Model Studio.
+# fexor-code Qwen 3.7 Max launcher — Anthropic Messages -> Alibaba Model Studio.
 #
 # This is intentionally isolated from the Venice, DeepSeek, GPT, and Claude
 # launchers:
-#   - own CLAUDE_CONFIG_DIR=~/.free-code-qwen37
+#   - own CLAUDE_CONFIG_DIR=~/.fexor-code-qwen37
 #   - reads qwen37_api_key from macOS Keychain or .env.qwen37
 #   - does not start LiteLLM and does not modify existing binaries
 #
@@ -12,7 +12,7 @@
 #   ./launch-qwen37.sh -p "review this change"
 #   QWEN37_MODEL=qwen3.7-max ./launch-qwen37.sh --model qwen3.7-max
 
-export CLAUDE_CONFIG_DIR="$HOME/.free-code-qwen37"
+export CLAUDE_CONFIG_DIR="$HOME/.fexor-code-qwen37"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ── Defensive: clear any provider env that may have leaked from a parent shell ─
@@ -86,12 +86,12 @@ export CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1
 
 # ── Maximize the token window (Qwen 3.7-Max = native 1M context) ─────────────
 # The picker description advertised "1M context" but the model id carries no [1m]
-# suffix, so free-code was budgeting only the 200K default and auto-compacting far
+# suffix, so fexor-code was budgeting only the 200K default and auto-compacting far
 # too early. CLAUDE_CODE_MAX_CONTEXT_TOKENS sets the real window client-side (never
 # sent to the API); we do NOT use the [1m] suffix because it would inject the
 # Anthropic-only context-1m beta that Alibaba's endpoint rejects.
 export CLAUDE_CODE_MAX_CONTEXT_TOKENS="${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-1000000}"
-# Qwen 3.7-Max supports large outputs; lift the per-turn ceiling to free-code's
+# Qwen 3.7-Max supports large outputs; lift the per-turn ceiling to fexor-code's
 # max for an unknown model (64K).
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS="${CLAUDE_CODE_MAX_OUTPUT_TOKENS:-64000}"
 
@@ -143,6 +143,6 @@ PY
 # Not available on this provider. Speech-to-text uses Anthropic's claude.ai
 # voice_stream endpoint (OAuth-gated), so /voice is hidden for API-key providers
 # like Qwen. Recording (SoX) works, but transcription is claude.ai-only —
-# use freecode-launch.sh / launch-claude-opus45.sh for voice.
+# use fexor-launch.sh / launch-claude-opus45.sh for voice.
 
 exec "$SCRIPT_DIR/cli-dev" "$@"

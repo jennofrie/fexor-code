@@ -1,11 +1,11 @@
-# CLAUDE.md — free-code workspace guide
+# CLAUDE.md — Fexor Code workspace guide
 
 Guidance for AI coding agents (Claude Code and others) working in this repository.
 For humans, start with [README.md](README.md).
 
 ## What this repo is
 
-`free-code` is a clean, buildable Bun/TypeScript fork of Anthropic's Claude Code
+`fexor-code` is a clean, buildable Bun/TypeScript fork of Anthropic's Claude Code
 CLI, reconstructed from the publicly-exposed source snapshot. Telemetry is
 stripped, prompt-level guardrails removed, and experimental feature flags are
 unlocked — including **13 flags reconstructed** from missing source files. See

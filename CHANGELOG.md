@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **free-code** are documented here.
+All notable changes to **Fexor Code** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project does not yet follow semantic versioning (it tracks the upstream
 Claude Code snapshot version, currently `2.1.87`).

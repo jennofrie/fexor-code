@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Isolate configuration so it doesn't conflict with your regular Claude account
-export CLAUDE_CONFIG_DIR="$HOME/.free-code-gpt"
+export CLAUDE_CONFIG_DIR="$HOME/.fexor-code-gpt"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Enable OpenAI mode
@@ -71,7 +71,7 @@ export CLAUDE_CODE_GPT_VERBOSITY="${CLAUDE_CODE_GPT_VERBOSITY:-medium}"
 # (MAX_THINKING_TOKENS intentionally removed: GPT runs through the Codex Responses
 #  adapter, which never sees the Anthropic thinking budget. Reasoning depth = effort.)
 
-if [ "${FREE_CODE_GPT_SHOW_CONFIG:-0}" = "1" ]; then
+if [ "${FEXOR_GPT_SHOW_CONFIG:-0}" = "1" ]; then
   {
     print -r -- "GPT launcher config:"
     print -r -- "  ANTHROPIC_MODEL=$ANTHROPIC_MODEL"
