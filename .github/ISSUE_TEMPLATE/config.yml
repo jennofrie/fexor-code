@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security report
+    url: https://github.com/jennofrie/free-code/security/advisories/new
+    about: Report vulnerabilities or leaked secrets privately (do not open a public issue).
+  - name: Feature-flag audit
+    url: https://github.com/jennofrie/free-code/blob/main/FEATURES.md
+    about: The full list of feature flags and reconstruction notes.

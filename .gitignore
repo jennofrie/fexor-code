@@ -1,0 +1,25 @@
+node_modules/
+dist/
+cli
+cli-dev
+openclaw/
+.env
+.env.*
+.env
+.aider*
+
+# graphify knowledge-graph output (local only)
+graphify-out/
+.graphify_analysis.json
+
+# local agent / tooling state — not for the public repo
+.claude/
+.antigravitycli/
+supabase/
+output/
+
+# unrelated private project plans (kept out of the public repo)
+docs/superpowers/
+
+# local-only operational instruction copies (full security context — never published)
+*.local.md
