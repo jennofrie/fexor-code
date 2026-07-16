@@ -15,6 +15,7 @@ import {
   CLAUDE_OPUS_4_CONFIG,
   CLAUDE_SONNET_4_5_CONFIG,
   CLAUDE_SONNET_4_6_CONFIG,
+  CLAUDE_SONNET_5_CONFIG,
   CLAUDE_SONNET_4_CONFIG,
 } from './model/configs.js'
 import {
@@ -39,6 +40,15 @@ export const COST_TIER_3_15 = {
   outputTokens: 15,
   promptCacheWriteTokens: 3.75,
   promptCacheReadTokens: 0.3,
+  webSearchRequests: 0.01,
+} as const satisfies ModelCosts
+
+// Introductory pricing for Sonnet 5 through 2026-08-31.
+export const COST_TIER_2_10 = {
+  inputTokens: 2,
+  outputTokens: 10,
+  promptCacheWriteTokens: 2.5,
+  promptCacheReadTokens: 0.2,
   webSearchRequests: 0.01,
 } as const satisfies ModelCosts
 
@@ -99,6 +109,11 @@ export function getOpus46CostTier(fastMode: boolean): ModelCosts {
   return COST_TIER_5_25
 }
 
+export function getSonnet5CostTier(now = new Date()): ModelCosts {
+  const introEndsExclusive = Date.UTC(2026, 8, 1)
+  return now.getTime() < introEndsExclusive ? COST_TIER_2_10 : COST_TIER_3_15
+}
+
 // @[MODEL LAUNCH]: Add a pricing entry for the new model below.
 // Costs from https://platform.claude.com/docs/en/about-claude/pricing
 // Web search cost: $10 per 1000 requests = $0.01 per request
@@ -116,6 +131,8 @@ export const MODEL_COSTS: Record<ModelShortName, ModelCosts> = {
   [firstPartyNameToCanonical(CLAUDE_SONNET_4_5_CONFIG.firstParty)]:
     COST_TIER_3_15,
   [firstPartyNameToCanonical(CLAUDE_SONNET_4_6_CONFIG.firstParty)]:
+    COST_TIER_3_15,
+  [firstPartyNameToCanonical(CLAUDE_SONNET_5_CONFIG.firstParty)]:
     COST_TIER_3_15,
   [firstPartyNameToCanonical(CLAUDE_OPUS_4_CONFIG.firstParty)]: COST_TIER_15_75,
   [firstPartyNameToCanonical(CLAUDE_OPUS_4_1_CONFIG.firstParty)]:
@@ -154,6 +171,10 @@ export function getModelCosts(model: string, usage: Usage): ModelCosts {
   ) {
     const isFastMode = usage.speed === 'fast'
     return getOpus46CostTier(isFastMode)
+  }
+
+  if (shortName === firstPartyNameToCanonical(CLAUDE_SONNET_5_CONFIG.firstParty)) {
+    return getSonnet5CostTier()
   }
 
   const costs = MODEL_COSTS[shortName]
@@ -229,6 +250,9 @@ export function formatModelPricing(costs: ModelCosts): string {
  */
 export function getModelPricingString(model: string): string | undefined {
   const shortName = getCanonicalName(model)
+  if (shortName === firstPartyNameToCanonical(CLAUDE_SONNET_5_CONFIG.firstParty)) {
+    return formatModelPricing(getSonnet5CostTier())
+  }
   const costs = MODEL_COSTS[shortName]
   if (!costs) return undefined
   return formatModelPricing(costs)

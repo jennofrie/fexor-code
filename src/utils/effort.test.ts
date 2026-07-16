@@ -38,6 +38,14 @@ afterEach(() => {
 })
 
 describe('Claude effort defaults', () => {
+  test('supports Sonnet 5 effort while preserving the API high default', () => {
+    expect(modelSupportsEffort('claude-sonnet-5')).toBe(true)
+    expect(modelSupportsMaxEffort('claude-sonnet-5')).toBe(true)
+    expect(getDefaultEffortForModel('claude-sonnet-5')).toBeUndefined()
+    expect(resolveAppliedEffort('claude-sonnet-5', undefined)).toBeUndefined()
+    expect(resolveAppliedEffort('claude-sonnet-5', 'max')).toBe('max')
+  })
+
   test('defaults Sonnet 4.6 to max effort', () => {
     expect(getDefaultEffortForModel('claude-sonnet-4-6')).toBe('max')
     expect(resolveAppliedEffort('claude-sonnet-4-6', undefined)).toBe('max')
@@ -51,6 +59,19 @@ describe('Claude effort defaults', () => {
     expect(modelSupportsEffort('claude-sonnet-4-6')).toBe(true)
     expect(modelSupportsMaxEffort('claude-sonnet-4-6')).toBe(true)
     expect(resolveAppliedEffort('claude-sonnet-4-6', 'max')).toBe('max')
+  })
+
+  test('supports max effort on DeepSeek V4 launch models', () => {
+    expect(modelSupportsEffort('deepseek-v4-pro')).toBe(true)
+    expect(modelSupportsMaxEffort('deepseek-v4-pro')).toBe(true)
+    expect(resolveAppliedEffort('deepseek-v4-pro', 'max')).toBe('max')
+  })
+
+  test('supports max effort on GLM 5.2 launch models', () => {
+    expect(modelSupportsEffort('glm-5.2[1m]')).toBe(true)
+    expect(modelSupportsMaxEffort('glm-5.2[1m]')).toBe(true)
+    expect(getDefaultEffortForModel('glm-5.2[1m]')).toBe('max')
+    expect(resolveAppliedEffort('glm-5.2[1m]', 'max')).toBe('max')
   })
 
   test('defaults Opus 4.5 to high effort because the API rejects max', () => {

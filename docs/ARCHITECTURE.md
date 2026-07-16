@@ -84,7 +84,9 @@ Resolved in `utils/context.ts:getContextWindowForModel`, in precedence order:
 1. `CLAUDE_CODE_MAX_CONTEXT_TOKENS` — **honored in external builds** (patched; was `ant`-only). Client-side budgeting value; never sent to a provider.
 2. `[1m]` model-suffix → 1,000,000 (stripped from the model id before the wire).
 3. GPT-5.4 special case → 1,050,000.
-4. Otherwise → **200,000 default** for unknown models.
+4. Known native 1M Claude models, including Claude Sonnet 5, Sonnet 4.6, Opus 4.6, and Opus 4.8 → 1,000,000 without a beta header.
+5. Cached provider model capabilities, when available.
+6. Otherwise → **200,000 default** for unknown models.
 
 > Third-party 1M models (DeepSeek, Qwen) are unknown to the table and would
 > default to 200K — so the launchers set `CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000`
@@ -94,7 +96,8 @@ Resolved in `utils/context.ts:getContextWindowForModel`, in precedence order:
 ### Output tokens
 
 `getModelMaxOutputTokens` keys off the canonical model name; `CLAUDE_CODE_MAX_OUTPUT_TOKENS`
-overrides up to the per-model upper limit. Opus 4.7/4.8 were patched to 64K/128K
+overrides up to the per-model upper limit. Claude Sonnet 5 is configured as
+32K default / 128K upper, and Opus 4.7/4.8 were patched to 64K/128K
 (previously capped at 32K).
 
 ### Third-party fidelity

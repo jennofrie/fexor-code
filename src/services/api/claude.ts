@@ -201,6 +201,7 @@ import { validateBoundedIntEnvVar } from '../../utils/envValidation.js'
 import { safeParseJSON } from '../../utils/json.js'
 import { getInferenceProfileBackingModel } from '../../utils/model/bedrock.js'
 import {
+  modelRequiresDefaultSamplingParams,
   normalizeModelStringForAPI,
   parseUserSpecifiedModel,
 } from '../../utils/model/model.js'
@@ -1690,9 +1691,23 @@ async function* queryModel(
 
     // Only send temperature when thinking is disabled — the API requires
     // temperature: 1 when thinking is enabled, which is already the default.
-    const temperature = !hasThinking
+    const requestedTemperature = !hasThinking
       ? (options.temperatureOverride ?? 1)
       : undefined
+    const requiresDefaultSampling = modelRequiresDefaultSamplingParams(
+      options.model,
+    )
+    const temperature = requiresDefaultSampling
+      ? undefined
+      : requestedTemperature
+    const sanitizedExtraBodyParams = requiresDefaultSampling
+      ? { ...extraBodyParams }
+      : extraBodyParams
+    if (requiresDefaultSampling) {
+      delete sanitizedExtraBodyParams.temperature
+      delete sanitizedExtraBodyParams.top_p
+      delete sanitizedExtraBodyParams.top_k
+    }
 
     lastRequestBetas = betasParams
 
@@ -1720,7 +1735,7 @@ async function* queryModel(
         betasParams.includes(CONTEXT_MANAGEMENT_BETA_HEADER) && {
           context_management: contextManagement,
         }),
-      ...extraBodyParams,
+      ...sanitizedExtraBodyParams,
       ...(Object.keys(outputConfig).length > 0 && {
         output_config: outputConfig,
       }),
@@ -1745,7 +1760,7 @@ async function* queryModel(
       logAPIQuery({
         model: options.model,
         messagesLength: logMessagesLength,
-        temperature: options.temperatureOverride ?? 1,
+        temperature: queryParams.temperature ?? 1,
         betas: logBetas,
         permissionMode: permissionContext.mode,
         querySource: options.querySource,

@@ -20,7 +20,7 @@ What you expected to happen.
 - fexor-code version: `./cli-dev --version`
 - Bun version: `bun --version`
 - OS / arch:
-- Provider / launcher (if relevant): e.g. `launch-gpt.sh`, `launch.sh`
+- Provider / launcher (if relevant): e.g. `launch-gpt.sh`, `launch-deepseek.sh`
 
 **Logs / output**
 Paste relevant terminal output (redact any secrets).

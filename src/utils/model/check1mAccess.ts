@@ -63,7 +63,8 @@ export function checkSonnet1mAccess(): boolean {
   }
 
   if (isClaudeAISubscriber()) {
-    // Max subscribers always have access to Sonnet 1M (which resolves to Sonnet 4.6 GA)
+    // Max subscribers always have access to Sonnet 1M. First-party Sonnet 5
+    // now uses 1M context natively; this gate remains for legacy/gateway options.
     if (isMaxSubscriber()) {
       return true
     }

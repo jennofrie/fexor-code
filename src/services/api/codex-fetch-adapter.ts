@@ -60,6 +60,24 @@ export const DEFAULT_CODEX_MODEL = 'gpt-5.5'
 const CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex/responses'
 const JWT_CLAIM_PATH = 'https://api.openai.com/auth'
 
+export const SAKANA_MODELS = [
+  { id: 'fugu', label: 'Fugu', description: 'Sakana Fugu' },
+  {
+    id: 'fugu-ultra',
+    label: 'Fugu Ultra',
+    description: 'Sakana Fugu Ultra',
+  },
+  {
+    id: 'fugu-ultra-20260615',
+    label: 'Fugu Ultra 20260615',
+    description: 'Pinned Sakana Fugu Ultra snapshot',
+  },
+] as const
+
+export const DEFAULT_SAKANA_MODEL = 'fugu'
+
+const DEFAULT_SAKANA_BASE_URL = 'https://api.sakana.ai/v1/responses'
+
 let pendingCodexRefresh:
   | Promise<{ accessToken: string; accountId: string }>
   | null = null
@@ -96,6 +114,15 @@ interface AnthropicTool {
 type RequestedReasoningEffort = 'low' | 'medium' | 'high' | 'max' | 'xhigh'
 type CodexReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh'
 type CodexVerbosity = 'low' | 'medium' | 'high'
+type ResponsesBackend = 'codex' | 'sakana'
+
+type ResponsesFetchOptions = {
+  backend: ResponsesBackend
+  accessToken?: string
+  apiKey?: string
+  baseFetch: typeof globalThis.fetch
+  baseUrl?: string
+}
 
 type ToolBlockState = {
   index: number
@@ -126,8 +153,42 @@ export function isCodexModel(model: string): boolean {
   return CODEX_MODELS.some(m => m.id === model)
 }
 
+export function isSakanaModel(model: string): boolean {
+  const normalized = model.toLowerCase()
+  return (
+    SAKANA_MODELS.some(m => m.id === normalized) ||
+    /^fugu(?:-|$)/.test(normalized)
+  )
+}
+
+export function mapClaudeModelToSakana(claudeModel: string | null): string {
+  if (!claudeModel) return DEFAULT_SAKANA_MODEL
+  if (isSakanaModel(claudeModel)) return claudeModel
+  const lower = claudeModel.toLowerCase()
+  if (lower.includes('opus') || lower.includes('ultra')) return 'fugu-ultra'
+  return DEFAULT_SAKANA_MODEL
+}
+
+function mapClaudeModelToResponses(
+  claudeModel: string | null,
+  backend: ResponsesBackend,
+): string {
+  return backend === 'sakana'
+    ? mapClaudeModelToSakana(claudeModel)
+    : mapClaudeModelToCodex(claudeModel)
+}
+
 function codexModelSupportsReasoning(modelId: string): boolean {
   return modelId.startsWith('gpt-5')
+}
+
+function responsesModelSupportsReasoning(
+  modelId: string,
+  backend: ResponsesBackend,
+): boolean {
+  return backend === 'sakana'
+    ? isSakanaModel(modelId)
+    : codexModelSupportsReasoning(modelId)
 }
 
 function codexModelSupportsExtraHighReasoning(modelId: string): boolean {
@@ -239,7 +300,9 @@ const EFFORT_PATTERN =
   /reasoning effort level:\s*(low|medium|high|max|xhigh|extra[-\s]?high)/i
 const ULTRATHINK_PATTERN = /\bultrathink\b/i
 const DEFAULT_GPT_REASONING_EFFORT: RequestedReasoningEffort = 'max'
+const DEFAULT_SAKANA_REASONING_EFFORT: RequestedReasoningEffort = 'high'
 const GPT_DEFAULT_EFFORT_ENV = 'CLAUDE_CODE_GPT_DEFAULT_EFFORT'
+const SAKANA_DEFAULT_EFFORT_ENV = 'CLAUDE_CODE_SAKANA_DEFAULT_EFFORT'
 
 function normalizeEffort(value: string): RequestedReasoningEffort | null {
   const level = value.toLowerCase().replace(/\s+/g, '-')
@@ -281,10 +344,26 @@ function defaultGptEffortFromEnv(): RequestedReasoningEffort | null {
   return normalizeEffort(raw) ?? DEFAULT_GPT_REASONING_EFFORT
 }
 
+function defaultReasoningEffortFromEnv(
+  backend: ResponsesBackend,
+): RequestedReasoningEffort | null {
+  if (backend === 'codex') return defaultGptEffortFromEnv()
+
+  const raw =
+    process.env[SAKANA_DEFAULT_EFFORT_ENV] ?? process.env[GPT_DEFAULT_EFFORT_ENV]
+  if (!raw) return DEFAULT_SAKANA_REASONING_EFFORT
+  const normalized = raw.toLowerCase()
+  if (normalized === 'unset' || normalized === 'auto' || normalized === 'none') {
+    return null
+  }
+  return normalizeEffort(raw) ?? DEFAULT_SAKANA_REASONING_EFFORT
+}
+
 function extractReasoningEffort(
   messages: AnthropicMessage[],
   instructions: string,
   outputConfig?: Record<string, unknown>,
+  backend: ResponsesBackend = 'codex',
 ): { effort: RequestedReasoningEffort; fromUltrathink: boolean } | null {
   const fromInstructions = checkEffortText(instructions)
   if (fromInstructions) {
@@ -329,7 +408,7 @@ function extractReasoningEffort(
     return envEffort ? { effort: envEffort, fromUltrathink: false } : null
   }
 
-  const defaultEffort = defaultGptEffortFromEnv()
+  const defaultEffort = defaultReasoningEffortFromEnv(backend)
   return defaultEffort ? { effort: defaultEffort, fromUltrathink: false } : null
 }
 
@@ -345,6 +424,25 @@ function mapReasoningEffortForCodex(
     return codexModelSupportsExtraHighReasoning(modelId) ? 'xhigh' : 'high'
   }
   return requested.effort
+}
+
+function mapReasoningEffortForResponses(
+  requested: { effort: RequestedReasoningEffort; fromUltrathink: boolean },
+  modelId: string,
+  backend: ResponsesBackend,
+): string {
+  if (backend === 'sakana') {
+    if (
+      requested.effort === 'xhigh' ||
+      requested.effort === 'max' ||
+      (requested.fromUltrathink && requested.effort === 'high')
+    ) {
+      return 'xhigh'
+    }
+    // Sakana Fugu currently rejects low/medium. Use the lowest accepted level.
+    return 'high'
+  }
+  return mapReasoningEffortForCodex(requested, modelId)
 }
 
 function resolveVerbosity(): CodexVerbosity {
@@ -377,6 +475,20 @@ function shouldInterceptMessagesUrl(url: string): boolean {
     return new URL(url).pathname.endsWith('/v1/messages')
   } catch {
     return url.endsWith('/v1/messages')
+  }
+}
+
+function normalizeSakanaResponsesUrl(baseUrl: string): string {
+  try {
+    const url = new URL(baseUrl)
+    if (/\/v1\/?$/i.test(url.pathname)) {
+      url.pathname = url.pathname.replace(/\/?$/i, '/responses')
+    }
+    return url.toString()
+  } catch {
+    return /\/v1\/?$/i.test(baseUrl)
+      ? baseUrl.replace(/\/?$/i, '/responses')
+      : baseUrl
   }
 }
 
@@ -494,7 +606,10 @@ function translateMessages(
   return codexInput
 }
 
-function translateToCodexBody(anthropicBody: Record<string, unknown>): {
+function translateToCodexBody(
+  anthropicBody: Record<string, unknown>,
+  backend: ResponsesBackend = 'codex',
+): {
   codexBody: Record<string, unknown>
   codexModel: string
   isStreaming: boolean
@@ -511,7 +626,7 @@ function translateToCodexBody(anthropicBody: Record<string, unknown>): {
     | undefined
   const toolChoice = anthropicBody.tool_choice
 
-  const codexModel = mapClaudeModelToCodex(claudeModel)
+  const codexModel = mapClaudeModelToResponses(claudeModel, backend)
   const instructions =
     typeof systemPrompt === 'string'
       ? systemPrompt
@@ -522,42 +637,59 @@ function translateToCodexBody(anthropicBody: Record<string, unknown>): {
             .join('\n')
         : ''
 
-  const codexBody: Record<string, unknown> = {
-    model: codexModel,
-    store: false,
-    stream: true,
-    instructions,
-    input: translateMessages(anthropicMessages),
-    tool_choice: translateToolChoice(toolChoice),
-    parallel_tool_calls: true,
-    include: [],
-    prompt_cache_key: buildPromptCacheKey(),
-    client_metadata: {
-      originator: 'fexor-code',
-    },
-    text: { verbosity: resolveVerbosity() },
-  }
+  const codexBody: Record<string, unknown> =
+    backend === 'sakana'
+      ? {
+          model: codexModel,
+          stream: true,
+          instructions,
+          input: translateMessages(anthropicMessages),
+          tool_choice: translateToolChoice(toolChoice),
+          parallel_tool_calls: true,
+        }
+      : {
+          model: codexModel,
+          store: false,
+          stream: true,
+          instructions,
+          input: translateMessages(anthropicMessages),
+          tool_choice: translateToolChoice(toolChoice),
+          parallel_tool_calls: true,
+          include: [],
+          prompt_cache_key: buildPromptCacheKey(),
+          client_metadata: {
+            originator: 'fexor-code',
+          },
+          text: { verbosity: resolveVerbosity() },
+        }
 
   const maxTokens = anthropicBody.max_tokens
   if (
-    shouldForwardMaxOutputTokens() &&
+    (backend === 'sakana' || shouldForwardMaxOutputTokens()) &&
     typeof maxTokens === 'number' &&
     Number.isFinite(maxTokens)
   ) {
     codexBody.max_output_tokens = Math.max(1, Math.floor(maxTokens))
   }
 
-  if (codexModelSupportsReasoning(codexModel)) {
+  if (responsesModelSupportsReasoning(codexModel, backend)) {
     const requestedEffort = extractReasoningEffort(
       anthropicMessages,
       instructions,
       outputConfig,
+      backend,
     )
     if (requestedEffort) {
       codexBody.reasoning = {
-        effort: mapReasoningEffortForCodex(requestedEffort, codexModel),
+        effort: mapReasoningEffortForResponses(
+          requestedEffort,
+          codexModel,
+          backend,
+        ),
       }
-      codexBody.include = ['reasoning.encrypted_content']
+      if (backend === 'codex') {
+        codexBody.include = ['reasoning.encrypted_content']
+      }
     }
   }
 
@@ -1153,14 +1285,16 @@ function codexErrorResponse(
 
 // ── Main fetch interceptor ──────────────────────────────────────────
 
-/**
- * Creates a fetch function that intercepts Anthropic API calls and routes them
- * to Codex. Only used when OpenAI mode and Codex OAuth are active.
- */
-export function createCodexFetch(
-  accessToken: string,
-  baseFetch: typeof globalThis.fetch = globalThis.fetch,
-): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+function createResponsesFetch({
+  backend,
+  accessToken,
+  apiKey,
+  baseFetch,
+  baseUrl,
+}: ResponsesFetchOptions): (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response> {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = input instanceof Request ? input.url : String(input)
 
@@ -1181,8 +1315,63 @@ export function createCodexFetch(
       anthropicBody = {}
     }
 
-    const { codexBody, codexModel, isStreaming } =
-      translateToCodexBody(anthropicBody)
+    const { codexBody, codexModel, isStreaming } = translateToCodexBody(
+      anthropicBody,
+      backend,
+    )
+
+    if (backend === 'sakana') {
+      if (!apiKey) {
+        return codexErrorResponse(
+          'Sakana API key is missing. Set SAKANA_API_KEY or store it in the sakana_api_key Keychain service.',
+          401,
+          isStreaming,
+        )
+      }
+
+      const sakanaResponse = await baseFetch(baseUrl ?? DEFAULT_SAKANA_BASE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(codexBody),
+        signal: init?.signal,
+      })
+
+      if (!sakanaResponse.ok) {
+        const errorText = await sakanaResponse.text().catch(() => '')
+        return codexErrorResponse(
+          `Sakana API error (${sakanaResponse.status}): ${errorText}`,
+          sakanaResponse.status,
+          isStreaming,
+        )
+      }
+
+      try {
+        return isStreaming
+          ? translateCodexStreamToAnthropic(sakanaResponse, codexModel)
+          : await translateCodexStreamToAnthropicMessage(
+              sakanaResponse,
+              codexModel,
+            )
+      } catch (err) {
+        return codexErrorResponse(
+          err instanceof Error ? err.message : String(err),
+          500,
+          isStreaming,
+        )
+      }
+    }
+
+    if (!accessToken) {
+      return codexErrorResponse(
+        'Codex OAuth token is missing. Please run /login again and choose OpenAI Codex account.',
+        401,
+        isStreaming,
+      )
+    }
 
     let auth: { accessToken: string; accountId: string }
     try {
@@ -1240,4 +1429,36 @@ export function createCodexFetch(
       )
     }
   }
+}
+
+/**
+ * Creates a fetch function that intercepts Anthropic API calls and routes them
+ * to Codex. Only used when OpenAI mode and Codex OAuth are active.
+ */
+export function createCodexFetch(
+  accessToken: string,
+  baseFetch: typeof globalThis.fetch = globalThis.fetch,
+): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+  return createResponsesFetch({
+    backend: 'codex',
+    accessToken,
+    baseFetch,
+  })
+}
+
+/**
+ * Creates a fetch function that routes Anthropic Messages-shaped SDK calls to
+ * Sakana's OpenAI-compatible Responses endpoint.
+ */
+export function createSakanaFetch(
+  apiKey: string,
+  baseFetch: typeof globalThis.fetch = globalThis.fetch,
+  baseUrl: string = DEFAULT_SAKANA_BASE_URL,
+): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+  return createResponsesFetch({
+    backend: 'sakana',
+    apiKey,
+    baseFetch,
+    baseUrl: normalizeSakanaResponsesUrl(baseUrl),
+  })
 }

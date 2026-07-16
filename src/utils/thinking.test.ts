@@ -44,4 +44,9 @@ describe('Claude thinking support', () => {
   test('supports adaptive thinking for Sonnet 4.6', () => {
     expect(modelSupportsAdaptiveThinking('claude-sonnet-4-6')).toBe(true)
   })
+
+  test('supports adaptive thinking for Sonnet 5', () => {
+    expect(modelSupportsThinking('claude-sonnet-5')).toBe(true)
+    expect(modelSupportsAdaptiveThinking('claude-sonnet-5')).toBe(true)
+  })
 })

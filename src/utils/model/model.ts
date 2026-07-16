@@ -121,11 +121,11 @@ export function getDefaultSonnetModel(): ModelName {
   if (process.env.ANTHROPIC_DEFAULT_SONNET_MODEL) {
     return process.env.ANTHROPIC_DEFAULT_SONNET_MODEL
   }
-  // Default to Sonnet 4.5 for 3P since they may not have 4.6 yet
+  // Default to Sonnet 4.5 for 3P since they may not have newer Sonnet releases yet.
   if (getAPIProvider() !== 'firstParty') {
     return getModelStrings().sonnet45
   }
-  return getModelStrings().sonnet46
+  return getModelStrings().sonnet50
 }
 
 // @[MODEL LAUNCH]: Update the default Haiku model (3P providers may lag so keep defaults unchanged).
@@ -172,7 +172,7 @@ export function getRuntimeMainLoopModel(params: {
  *
  * This handles the built-in default:
  * - Opus for Max and Team Premium users
- * - Sonnet 4.6 for all other users (including Team Standard, Pro, Enterprise)
+ * - Sonnet 5 for all other first-party users (including Team Standard, Pro, Enterprise)
  *
  * @returns The default model setting to use
  */
@@ -237,6 +237,9 @@ export function firstPartyNameToCanonical(name: ModelName): ModelShortName {
   }
   if (name.includes('claude-opus-4')) {
     return 'claude-opus-4'
+  }
+  if (name.includes('claude-sonnet-5')) {
+    return 'claude-sonnet-5'
   }
   if (name.includes('claude-sonnet-4-6')) {
     return 'claude-sonnet-4-6'
@@ -318,7 +321,9 @@ export function getClaudeAiUserDefaultModelDescription(
     }
     return `${opusName} · Most capable for complex work${fastMode ? getOpus46PricingSuffix(true) : ''}`
   }
-  return 'Sonnet 4.6 · Best for everyday tasks'
+  return getAPIProvider() === 'firstParty'
+    ? 'Sonnet 5 · Best for everyday tasks · 1M context'
+    : 'Sonnet 4.5 · Best for everyday tasks'
 }
 
 export function renderDefaultModelSetting(
@@ -326,8 +331,8 @@ export function renderDefaultModelSetting(
 ): string {
   if (setting === 'opusplan') {
     return getAPIProvider() === 'firstParty'
-      ? 'Opus 4.8 in plan mode, else Sonnet 4.6'
-      : 'Opus 4.6 in plan mode, else Sonnet 4.6'
+      ? 'Opus 4.8 in plan mode, else Sonnet 5'
+      : 'Opus 4.6 in plan mode, else Sonnet 4.5'
   }
   return renderModelName(parseUserSpecifiedModel(setting))
 }
@@ -375,6 +380,9 @@ export function renderModelSetting(setting: ModelName | ModelAlias): string {
  * if the model is not recognized as a public model.
  */
 export function getPublicModelDisplayName(model: ModelName): string | null {
+  if (model.toLowerCase().startsWith('fugu-ultra')) return 'Fugu Ultra'
+  if (model.toLowerCase().startsWith('fugu')) return 'Fugu'
+
   if (model.includes('gpt-') || model.includes('codex')) {
     if (model === 'gpt-5.5') return 'GPT-5.5'
     if (model === 'gpt-5.2-codex') return 'Codex 5.2'
@@ -387,6 +395,10 @@ export function getPublicModelDisplayName(model: ModelName): string | null {
   }
 
   switch (model) {
+    case getModelStrings().sonnet50:
+      return 'Sonnet 5'
+    case getModelStrings().sonnet50 + '[1m]':
+      return 'Sonnet 5 (1M context)'
     case getModelStrings().opus48:
       return 'Opus 4.8'
     case getModelStrings().opus48 + '[1m]':
@@ -474,7 +486,11 @@ export function renderModelName(model: ModelName): string {
 export function getPublicModelName(model: ModelName): string {
   const publicName = getPublicModelDisplayName(model)
   if (publicName) {
-    if (model.includes('gpt-') || model.includes('codex')) {
+    if (
+      model.includes('gpt-') ||
+      model.includes('codex') ||
+      model.toLowerCase().startsWith('fugu')
+    ) {
       return publicName
     }
     return `Claude ${publicName}`
@@ -643,6 +659,9 @@ export function getMarketingNameForModel(modelId: string): string | undefined {
   if (canonical.includes('claude-opus-4')) {
     return 'Opus 4'
   }
+  if (canonical.includes('claude-sonnet-5')) {
+    return has1m ? 'Sonnet 5 (with 1M context)' : 'Sonnet 5'
+  }
   if (canonical.includes('claude-sonnet-4-6')) {
     return has1m ? 'Sonnet 4.6 (with 1M context)' : 'Sonnet 4.6'
   }
@@ -677,10 +696,25 @@ export function getMarketingNameForModel(modelId: string): string | undefined {
   if (canonical.includes('gpt-5.3-codex')) {
     return 'GPT-5.3 Codex'
   }
+  if (canonical.includes('fugu-ultra')) {
+    return 'Fugu Ultra'
+  }
+  if (canonical.includes('fugu')) {
+    return 'Fugu'
+  }
 
   return undefined
 }
 
 export function normalizeModelStringForAPI(model: string): string {
   return model.replace(/\[(1|2)m\]/gi, '')
+}
+
+export function modelRequiresDefaultSamplingParams(model: string): boolean {
+  const canonical = getCanonicalName(model)
+  return (
+    canonical.includes('claude-sonnet-5') ||
+    canonical.includes('claude-opus-4-8') ||
+    canonical.includes('claude-opus-4-7')
+  )
 }

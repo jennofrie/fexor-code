@@ -546,6 +546,13 @@ export function getAssistantMessageFromError(
         error: 'rate_limit',
       })
     }
+    const formattedRateLimit = formatAPIError(error)
+    if (formattedRateLimit !== error.message) {
+      return createAssistantAPIErrorMessage({
+        content: `${API_ERROR_MESSAGE_PREFIX}: Request rejected (429) · ${formattedRateLimit}`,
+        error: 'rate_limit',
+      })
+    }
     // SDK's APIError.makeMessage prepends "429 " and JSON-stringifies the body
     // when there's no top-level .message — extract the inner error.message.
     const stripped = error.message.replace(/^429\s+/, '')
@@ -943,6 +950,10 @@ function get3PModelFallbackSuggestion(model: string): string | undefined {
   }
   // @[MODEL LAUNCH]: Add a fallback suggestion chain for the new model → previous version for 3P
   const m = model.toLowerCase()
+  // If the failing model looks like a Sonnet 5 variant, suggest the default Sonnet (4.5 for 3P)
+  if (m.includes('sonnet-5') || m.includes('sonnet_5')) {
+    return getModelStrings().sonnet45
+  }
   // If the failing model looks like an Opus 4.6 variant, suggest the default Opus (4.1 for 3P)
   if (m.includes('opus-4-6') || m.includes('opus_4_6')) {
     return getModelStrings().opus41

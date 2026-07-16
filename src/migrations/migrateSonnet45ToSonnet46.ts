@@ -16,7 +16,8 @@ import {
 
 /**
  * Migrate Pro/Max/Team Premium first-party users off explicit Sonnet 4.5
- * model strings to the 'sonnet' alias (which now resolves to Sonnet 4.6).
+ * model strings to the 'sonnet' alias. When this migration was introduced,
+ * that alias resolved to Sonnet 4.6.
  *
  * Users may have been pinned to explicit Sonnet 4.5 strings by:
  * - The earlier migrateSonnet1mToSonnet45 migration (sonnet[1m] → explicit 4.5[1m])

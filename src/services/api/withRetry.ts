@@ -540,7 +540,11 @@ export async function* withRetry<T>(
   throw new CannotRetryError(lastError, retryContext)
 }
 
-function getRetryAfter(error: unknown): string | null {
+export function getRetryAfter(error: unknown): string | null {
+  return getRetryAfterFromHeaders(error) ?? getRetryAfterFromPayload(error)
+}
+
+function getRetryAfterFromHeaders(error: unknown): string | null {
   return (
     ((error as { headers?: { 'retry-after'?: string } }).headers?.[
       'retry-after'
@@ -549,6 +553,79 @@ function getRetryAfter(error: unknown): string | null {
       ((error as APIError).headers as Headers)?.get?.('retry-after')) ??
     null
   )
+}
+
+function getRetryAfterFromPayload(error: unknown): string | null {
+  const candidates = [
+    (error as { error?: unknown }).error,
+    (error as { body?: unknown }).body,
+    error,
+  ]
+  const seen = new Set<object>()
+
+  for (const candidate of candidates) {
+    const retryAfter = findRetryAfterValue(candidate, seen)
+    if (retryAfter !== null) {
+      return retryAfter
+    }
+  }
+
+  if (error instanceof Error) {
+    return extractRetryAfterFromString(error.message)
+  }
+
+  return null
+}
+
+function findRetryAfterValue(
+  value: unknown,
+  seen: Set<object>,
+): string | null {
+  if (typeof value === 'string') {
+    return extractRetryAfterFromString(value)
+  }
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  if (seen.has(value)) {
+    return null
+  }
+  seen.add(value)
+
+  const record = value as Record<string, unknown>
+  const direct =
+    record['retry-after'] ?? record.retry_after ?? record.retryAfter
+  const directRetryAfter = normalizeRetryAfterValue(direct)
+  if (directRetryAfter !== null) {
+    return directRetryAfter
+  }
+
+  for (const key of ['error', 'body', 'response', 'details']) {
+    const nested = findRetryAfterValue(record[key], seen)
+    if (nested !== null) {
+      return nested
+    }
+  }
+
+  return null
+}
+
+function normalizeRetryAfterValue(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value)
+  }
+  if (typeof value !== 'string') {
+    return null
+  }
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function extractRetryAfterFromString(message: string): string | null {
+  const match = message.match(
+    /["']retry[-_]after["']\s*:\s*["']?([^"',}\s]+)["']?/i,
+  )
+  return match?.[1] ?? null
 }
 
 export function getRetryDelay(

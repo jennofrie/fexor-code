@@ -8,7 +8,7 @@ import {
 } from '../auth.js'
 import { getModelStrings } from './modelStrings.js'
 import {
-  COST_TIER_3_15,
+  getSonnet5CostTier,
   COST_HAIKU_35,
   COST_HAIKU_45,
   formatModelPricing,
@@ -70,7 +70,7 @@ export function getDefaultOptionForUser(fastMode = false): ModelOption {
   return {
     value: null,
     label: 'Default (recommended)',
-    description: `Use the default model (currently ${renderDefaultModelSetting(getDefaultMainLoopModelSetting())})${is3P ? '' : ` · ${formatModelPricing(COST_TIER_3_15)}`}`,
+    description: `Use the default model (currently ${renderDefaultModelSetting(getDefaultMainLoopModelSetting())})${is3P ? '' : ` · ${formatModelPricing(getSonnet5CostTier())}`}`,
   }
 }
 
@@ -96,12 +96,13 @@ function getCustomSonnetOption(): ModelOption | undefined {
 // with the new model's label and description. These appear in the /model picker.
 function getSonnet46Option(): ModelOption {
   const is3P = getAPIProvider() !== 'firstParty'
+  const name = is3P ? 'Sonnet 4.6' : 'Sonnet 5'
   return {
     value: is3P ? getModelStrings().sonnet46 : 'sonnet',
     label: 'Sonnet',
-    description: `Sonnet 4.6 · Best for everyday tasks${is3P ? '' : ` · ${formatModelPricing(COST_TIER_3_15)}`}`,
+    description: `${name} · Best for everyday tasks${is3P ? '' : ` · 1M context · ${formatModelPricing(getSonnet5CostTier())}`}`,
     descriptionForModel:
-      'Sonnet 4.6 - best for everyday tasks. Generally recommended for most coding tasks',
+      `${name} - best for everyday tasks. Generally recommended for most coding tasks`,
   }
 }
 
@@ -144,12 +145,13 @@ function getOpusOption(fastMode = false): ModelOption {
 
 export function getSonnet46_1MOption(): ModelOption {
   const is3P = getAPIProvider() !== 'firstParty'
+  const name = is3P ? 'Sonnet 4.6' : 'Sonnet 5'
   return {
     value: is3P ? getModelStrings().sonnet46 + '[1m]' : 'sonnet[1m]',
     label: 'Sonnet (1M context)',
-    description: `Sonnet 4.6 for long sessions${is3P ? '' : ` · ${formatModelPricing(COST_TIER_3_15)}`}`,
+    description: `${name} for long sessions${is3P ? '' : ` · ${formatModelPricing(getSonnet5CostTier())}`}`,
     descriptionForModel:
-      'Sonnet 4.6 with 1M context window - for long sessions with large codebases',
+      `${name} with 1M context window - for long sessions with large codebases`,
   }
 }
 
@@ -188,7 +190,7 @@ function getHaiku45Option(): ModelOption {
     label: 'Haiku',
     description: `Haiku 4.5 · Fastest for quick answers${is3P ? '' : ` · ${formatModelPricing(COST_HAIKU_45)}`}`,
     descriptionForModel:
-      'Haiku 4.5 - fastest for quick answers. Lower cost but less capable than Sonnet 4.6.',
+      'Haiku 4.5 - fastest for quick answers. Lower cost but less capable than Sonnet.',
   }
 }
 
@@ -264,10 +266,11 @@ export function getMaxSonnet46_1MOption(): ModelOption {
   const is3P = getAPIProvider() !== 'firstParty'
   const isMax = isMaxSubscriber()
   const billingInfo = (isClaudeAISubscriber() && !isMax) ? ' · Billed as extra usage' : ''
+  const name = is3P ? 'Sonnet 4.6' : 'Sonnet 5'
   return {
     value: 'sonnet[1m]',
     label: 'Sonnet (1M context)',
-    description: `Sonnet 4.6 with 1M context${billingInfo}${is3P ? '' : ` · ${formatModelPricing(COST_TIER_3_15)}`}`,
+    description: `${name} with 1M context${billingInfo}${is3P ? '' : ` · ${formatModelPricing(getSonnet5CostTier())}`}`,
   }
 }
 
@@ -297,7 +300,7 @@ function getMergedOpus1MOption(fastMode = false): ModelOption {
 const MaxSonnet46Option: ModelOption = {
   value: 'sonnet',
   label: 'Sonnet',
-  description: 'Sonnet 4.6 · Best for everyday tasks',
+  description: 'Sonnet 5 · Best for everyday tasks · 1M context',
 }
 
 const MaxHaiku45Option: ModelOption = {
@@ -310,7 +313,9 @@ function getOpusPlanOption(): ModelOption {
   return {
     value: 'opusplan',
     label: 'Opus Plan Mode',
-    description: 'Use Opus 4.6 in plan mode, Sonnet 4.6 otherwise',
+    description: getAPIProvider() === 'firstParty'
+      ? 'Use Opus 4.8 in plan mode, Sonnet 5 otherwise'
+      : 'Use Opus 4.6 in plan mode, Sonnet 4.5 otherwise',
   }
 }
 
@@ -330,7 +335,6 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
       ...antModelOptions,
       getMergedOpus1MOption(fastMode),
       getSonnet46Option(),
-      getSonnet46_1MOption(),
       getHaiku45Option(),
     ]
   }
@@ -355,7 +359,7 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
       }
 
       premiumOptions.push(MaxSonnet46Option)
-      if (checkSonnet1mAccess()) {
+      if (getAPIProvider() !== 'firstParty' && checkSonnet1mAccess()) {
         premiumOptions.push(getMaxSonnet46_1MOption())
       }
 
@@ -365,7 +369,7 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
 
     // Pro/Team Standard/Enterprise users: Sonnet is default, show Opus as alternative
     const standardOptions = [getDefaultOptionForUser(fastMode)]
-    if (checkSonnet1mAccess()) {
+    if (getAPIProvider() !== 'firstParty' && checkSonnet1mAccess()) {
       standardOptions.push(getMaxSonnet46_1MOption())
     }
 
@@ -382,12 +386,9 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
     return standardOptions
   }
 
-  // PAYG 1P API: Default (Sonnet) + Sonnet 1M + Opus 4.6 + Opus 1M + Haiku
+  // PAYG 1P API: Default (Sonnet 5 native 1M) + Opus 4.8 + Opus 1M + Haiku
   if (getAPIProvider() === 'firstParty') {
     const payg1POptions = [getDefaultOptionForUser(fastMode)]
-    if (checkSonnet1mAccess()) {
-      payg1POptions.push(getSonnet46_1MOption())
-    }
     if (isOpus1mMergeEnabled()) {
       payg1POptions.push(getMergedOpus1MOption(fastMode))
     } else {
@@ -448,6 +449,7 @@ function getModelFamilyInfo(
 
   // Sonnet family
   if (
+    canonical.includes('claude-sonnet-5') ||
     canonical.includes('claude-sonnet-4-6') ||
     canonical.includes('claude-sonnet-4-5') ||
     canonical.includes('claude-sonnet-4-') ||

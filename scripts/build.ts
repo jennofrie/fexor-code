@@ -1,5 +1,13 @@
-import { chmodSync, existsSync, mkdirSync } from 'fs'
-import { dirname } from 'path'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'fs'
+import { basename, dirname, extname, join } from 'path'
 
 const pkg = await Bun.file(new URL('../package.json', import.meta.url)).json() as {
   name: string
@@ -140,6 +148,49 @@ if (outDir !== '.') {
   mkdirSync(outDir, { recursive: true })
 }
 
+function collectFiles(dir: string): string[] {
+  if (!existsSync(dir)) {
+    return []
+  }
+
+  const files: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const path = join(dir, entry)
+    const stat = statSync(path)
+    if (stat.isDirectory()) {
+      files.push(...collectFiles(path))
+    } else {
+      files.push(path)
+    }
+  }
+  return files
+}
+
+function createCliJsShims(): string[] {
+  const cliDir = join(process.cwd(), 'src', 'cli')
+  const created: string[] = []
+
+  for (const source of collectFiles(cliDir)) {
+    const ext = extname(source)
+    if (ext !== '.ts' && ext !== '.tsx') {
+      continue
+    }
+    if (source.endsWith('.d.ts')) {
+      continue
+    }
+
+    const shim = source.slice(0, -ext.length) + '.js'
+    if (existsSync(shim)) {
+      continue
+    }
+
+    writeFileSync(shim, `export * from './${basename(source)}';\n`)
+    created.push(shim)
+  }
+
+  return created
+}
+
 const externals = [
   '@ant/*',
   'audio-capture-napi',
@@ -205,12 +256,17 @@ for (const [key, value] of Object.entries(defines)) {
   cmd.push('--define', `${key}=${value}`)
 }
 
+const generatedShims = createCliJsShims()
 const proc = Bun.spawnSync({
   cmd,
   cwd: process.cwd(),
   stdout: 'inherit',
   stderr: 'inherit',
 })
+
+for (const shim of generatedShims) {
+  rmSync(shim, { force: true })
+}
 
 if (proc.exitCode !== 0) {
   process.exit(proc.exitCode ?? 1)

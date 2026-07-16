@@ -2,11 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { createCodexFetch } from './codex-fetch-adapter.js'
+import { createCodexFetch, createSakanaFetch } from './codex-fetch-adapter.js'
 
 const ENV_KEYS = [
   'CLAUDE_CODE_EFFORT_LEVEL',
   'CLAUDE_CODE_GPT_DEFAULT_EFFORT',
+  'CLAUDE_CODE_SAKANA_DEFAULT_EFFORT',
   'CLAUDE_CONFIG_DIR',
 ] as const
 
@@ -104,6 +105,45 @@ describe('Codex auth handling', () => {
   })
 })
 
+describe('Sakana Fugu request mapping', () => {
+  test('routes Fugu through the Responses API without Codex-only fields', async () => {
+    const { body, url } = await captureSakanaBody({
+      model: 'fugu',
+      messages: [{ role: 'user', content: 'audit this change' }],
+    })
+
+    expect(url).toBe('https://api.sakana.ai/v1/responses')
+    expect(body.model).toBe('fugu')
+    expect(body.reasoning).toEqual({ effort: 'high' })
+    expect(body.max_output_tokens).toBe(1024)
+    expect(body.include).toBeUndefined()
+    expect(body.text).toBeUndefined()
+    expect(body.prompt_cache_key).toBeUndefined()
+    expect(body.client_metadata).toBeUndefined()
+  })
+
+  test('clamps unsupported medium effort to Sakana high', async () => {
+    const { body } = await captureSakanaBody({
+      model: 'fugu-ultra',
+      output_config: { effort: 'medium' },
+      messages: [{ role: 'user', content: 'audit this change' }],
+    })
+
+    expect(body.model).toBe('fugu-ultra')
+    expect(body.reasoning).toEqual({ effort: 'high' })
+  })
+
+  test('maps max effort to Sakana xhigh', async () => {
+    const { body } = await captureSakanaBody({
+      model: 'fugu-ultra',
+      output_config: { effort: 'max' },
+      messages: [{ role: 'user', content: 'audit this change' }],
+    })
+
+    expect(body.reasoning).toEqual({ effort: 'xhigh' })
+  })
+})
+
 describe('Codex stream error handling', () => {
   test('surfaces streaming response.failed instead of ending an empty turn', async () => {
     const codexFetch = createCodexFetch(fakeCodexToken(), async () => {
@@ -183,6 +223,43 @@ async function captureCodexBody(
     throw new Error('Codex request body was not captured')
   }
   return captured
+}
+
+async function captureSakanaBody(
+  anthropicBody: Record<string, unknown>,
+): Promise<{ body: Record<string, unknown>; url: string }> {
+  let captured: Record<string, unknown> | undefined
+  let capturedUrl = ''
+  const sakanaFetch = createSakanaFetch(
+    'test-key',
+    async (input, init) => {
+      capturedUrl = String(input)
+      captured = JSON.parse(String(init?.body ?? '{}')) as Record<
+        string,
+        unknown
+      >
+      return new Response(codexSse(), {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    },
+    'https://api.sakana.ai/v1',
+  )
+
+  const response = await sakanaFetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    body: JSON.stringify({
+      max_tokens: 1024,
+      stream: false,
+      ...anthropicBody,
+    }),
+  })
+  await response.text()
+
+  if (!captured) {
+    throw new Error('Sakana request body was not captured')
+  }
+  return { body: captured, url: capturedUrl }
 }
 
 function fakeCodexToken(

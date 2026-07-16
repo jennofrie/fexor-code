@@ -107,6 +107,7 @@ export function modelSupportsISP(model: string): boolean {
     return !canonical.includes('claude-3-')
   }
   return (
+    canonical.includes('claude-sonnet-5') ||
     canonical.includes('claude-opus-4') || canonical.includes('claude-sonnet-4')
   )
 }
@@ -115,6 +116,7 @@ function vertexModelSupportsWebSearch(model: string): boolean {
   const canonical = getCanonicalName(model)
   // Web search only supported on Claude 4.0+ models on Vertex
   return (
+    canonical.includes('claude-sonnet-5') ||
     canonical.includes('claude-opus-4') ||
     canonical.includes('claude-sonnet-4') ||
     canonical.includes('claude-haiku-4')
@@ -132,6 +134,7 @@ export function modelSupportsContextManagement(model: string): boolean {
     return !canonical.includes('claude-3-')
   }
   return (
+    canonical.includes('claude-sonnet-5') ||
     canonical.includes('claude-opus-4') ||
     canonical.includes('claude-sonnet-4') ||
     canonical.includes('claude-haiku-4')
@@ -147,6 +150,7 @@ export function modelSupportsStructuredOutputs(model: string): boolean {
     return false
   }
   return (
+    canonical.includes('claude-sonnet-5') ||
     canonical.includes('claude-sonnet-4-6') ||
     canonical.includes('claude-sonnet-4-5') ||
     canonical.includes('claude-opus-4-1') ||
@@ -190,7 +194,7 @@ export function modelSupportsAutoMode(model: string): boolean {
       return true
     }
     // External allowlist (firstParty already checked above).
-    return /^claude-(opus|sonnet)-4-6/.test(m)
+    return /^claude-sonnet-5/.test(m) || /^claude-(opus|sonnet)-4-6/.test(m)
   }
   return false
 }
@@ -254,10 +258,17 @@ export const getAllModelBetas = memoize((model: string): string[] => {
   }
   if (has1mContext(model)) {
     const canonical = getCanonicalName(model)
-    // Sonnet 4.6 has 1M context generally available (GA) without a beta header.
+    // Known native-1M Claude models have 1M context generally available (GA)
+    // without a beta header.
     // Sending the retired context-1m-2025-08-07 beta header triggers legacy server-side
     // credit/billing checks that reject requests. Omit it to use GA native 1M context.
-    if (!canonical.includes('sonnet-4-6')) {
+    if (
+      !canonical.includes('sonnet-5') &&
+      !canonical.includes('sonnet-4-6') &&
+      !canonical.includes('opus-4-8') &&
+      !canonical.includes('opus-4-7') &&
+      !canonical.includes('opus-4-6')
+    ) {
       betaHeaders.push(CONTEXT_1M_BETA_HEADER)
     }
   }

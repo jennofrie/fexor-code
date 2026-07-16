@@ -116,6 +116,72 @@ function filterSwarmFieldsFromSchema(
   return filtered
 }
 
+/**
+ * Normalize tool JSON Schema so `required` is always a real array on object
+ * schemas. Zod omits `required` when a tool has no required fields (empty
+ * object or all-optional props). Anthropic accepts that; strict gateways
+ * (notably xAI) reject with:
+ *   Schema validation failed: /required: null is not of type "array"
+ */
+function normalizeToolInputJsonSchema(
+  schema: Anthropic.Tool.InputSchema,
+): Anthropic.Tool.InputSchema {
+  return normalizeJsonSchemaNode(schema) as Anthropic.Tool.InputSchema
+}
+
+function normalizeJsonSchemaNode(node: unknown): unknown {
+  if (!node || typeof node !== 'object') {
+    return node
+  }
+  if (Array.isArray(node)) {
+    return node.map(normalizeJsonSchemaNode)
+  }
+
+  const obj: Record<string, unknown> = { ...(node as Record<string, unknown>) }
+
+  const isObjectSchema =
+    obj.type === 'object' ||
+    (obj.properties !== undefined && typeof obj.properties === 'object')
+
+  if (isObjectSchema) {
+    if (!Array.isArray(obj.required)) {
+      obj.required = []
+    }
+  } else if ('required' in obj && !Array.isArray(obj.required)) {
+    delete obj.required
+  }
+
+  if (obj.properties && typeof obj.properties === 'object' && !Array.isArray(obj.properties)) {
+    const props: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(
+      obj.properties as Record<string, unknown>,
+    )) {
+      props[key] = normalizeJsonSchemaNode(value)
+    }
+    obj.properties = props
+  }
+
+  if (obj.items !== undefined) {
+    obj.items = normalizeJsonSchemaNode(obj.items)
+  }
+
+  for (const key of ['anyOf', 'oneOf', 'allOf'] as const) {
+    if (Array.isArray(obj[key])) {
+      obj[key] = (obj[key] as unknown[]).map(normalizeJsonSchemaNode)
+    }
+  }
+
+  if (
+    obj.additionalProperties &&
+    typeof obj.additionalProperties === 'object' &&
+    !Array.isArray(obj.additionalProperties)
+  ) {
+    obj.additionalProperties = normalizeJsonSchemaNode(obj.additionalProperties)
+  }
+
+  return obj
+}
+
 export async function toolToAPISchema(
   tool: Tool,
   options: {
@@ -165,6 +231,9 @@ export async function toolToAPISchema(
     if (!isAgentSwarmsEnabled()) {
       input_schema = filterSwarmFieldsFromSchema(tool.name, input_schema)
     }
+
+    // Strict 3P gateways (xAI) require `required` to be an array, not omitted/null.
+    input_schema = normalizeToolInputJsonSchema(input_schema)
 
     base = {
       name: tool.name,

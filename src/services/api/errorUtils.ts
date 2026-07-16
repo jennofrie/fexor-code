@@ -234,6 +234,11 @@ export function formatAPIError(error: APIError): string {
     }
   }
 
+  const providerRateLimitMessage = getProviderRateLimitMessage(error)
+  if (providerRateLimitMessage) {
+    return providerRateLimitMessage
+  }
+
   if (error.message === 'Connection error.') {
     // If we have a code but it's not SSL, include it for debugging
     if (connectionDetails?.code) {
@@ -257,4 +262,41 @@ export function formatAPIError(error: APIError): string {
   return sanitizedMessage !== error.message && sanitizedMessage.length > 0
     ? sanitizedMessage
     : error.message
+}
+
+function getProviderRateLimitMessage(error: APIError): string | null {
+  if (error.status !== 429) {
+    return null
+  }
+
+  const payload = (error as { error?: unknown }).error
+  const providerCode = findStringValue(payload, 'code')
+  const retryAfter = findStringValue(payload, 'retry-after')
+
+  if (providerCode === '1302' || retryAfter !== null) {
+    return 'Provider request rate limit reached.'
+  }
+
+  return null
+}
+
+function findStringValue(value: unknown, key: string): string | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const record = value as Record<string, unknown>
+  const direct = record[key]
+  if (typeof direct === 'string' && direct.length > 0) {
+    return direct
+  }
+
+  for (const child of Object.values(record)) {
+    const nested = findStringValue(child, key)
+    if (nested !== null) {
+      return nested
+    }
+  }
+
+  return null
 }

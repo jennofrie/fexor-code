@@ -48,6 +48,7 @@ export function modelSupports1M(model: string): boolean {
   }
   const canonical = getCanonicalName(model)
   return (
+    canonical.includes('claude-sonnet-5') ||
     canonical.includes('claude-sonnet-4') ||
     canonical.includes('opus-4-6') ||
     canonical.includes('opus-4-8') ||
@@ -58,6 +59,20 @@ export function modelSupports1M(model: string): boolean {
 function isGpt54LongContextModel(model: string): boolean {
   const normalized = model.toLowerCase().replace(/\[1m\]$/i, '').trim()
   return normalized === 'gpt-5.4' || normalized === 'gpt-5.4-pro'
+}
+
+function modelHasNative1MContext(model: string): boolean {
+  if (is1mContextDisabled()) {
+    return false
+  }
+  const canonical = getCanonicalName(model)
+  return (
+    canonical.includes('claude-sonnet-5') ||
+    canonical.includes('claude-sonnet-4-6') ||
+    canonical.includes('opus-4-8') ||
+    canonical.includes('opus-4-7') ||
+    canonical.includes('opus-4-6')
+  )
 }
 
 export function getContextWindowForModel(
@@ -87,6 +102,10 @@ export function getContextWindowForModel(
     return GPT_5_4_CONTEXT_WINDOW
   }
 
+  if (modelHasNative1MContext(model)) {
+    return 1_000_000
+  }
+
   const cap = getModelCapability(model)
   if (cap?.max_input_tokens && cap.max_input_tokens >= 100_000) {
     if (
@@ -114,9 +133,9 @@ export function getContextWindowForModel(
 }
 
 export function getSonnet1mExpTreatmentEnabled(model: string): boolean {
-  // Obsolete: Sonnet 4.6 1M context is generally available (GA) without a beta header.
+  // Obsolete: recent Claude 1M context is generally available (GA) without a beta header.
   // Returning true would inject the retired beta header and trigger legacy credit-check rate limits.
-  return false;
+  return false
 }
 
 /**
@@ -172,11 +191,18 @@ export function getModelMaxOutputTokens(model: string): {
 
   const m = getCanonicalName(model)
 
-  if (m.includes('opus-4-8') || m.includes('opus-4-7') || m.includes('opus-4-6')) {
-    // Opus 4.6/4.7/4.8 all support 128K output. (4.7/4.8 were not in the original
-    // table, so the latest Opus fell through to the generic opus-4 branch and was
-    // silently capped at 32K out.)
+  if (m.includes('glm-5.2')) {
     defaultTokens = 64_000
+    upperLimit = 128_000
+  } else if (
+    m.includes('sonnet-5') ||
+    m.includes('opus-4-8') ||
+    m.includes('opus-4-7') ||
+    m.includes('opus-4-6')
+  ) {
+    // Sonnet 5 and Opus 4.6/4.7/4.8 support 128K output. Keep Sonnet's
+    // default at 32K to match the existing Sonnet 4.6 budgeting posture.
+    defaultTokens = m.includes('sonnet-5') ? 32_000 : 64_000
     upperLimit = 128_000
   } else if (m.includes('sonnet-4-6')) {
     defaultTokens = 32_000

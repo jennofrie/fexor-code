@@ -145,7 +145,7 @@ Full audit of all 88 flags → **[FEATURES.md](FEATURES.md)**.
 ```mermaid
 flowchart LR
     APP["Fexor Code<br/><sub>Anthropic Messages</sub>"]
-    APP --> ANT["Anthropic API / claude.ai<br/><sub>Opus 4.8 · 1M</sub>"]
+    APP --> ANT["Anthropic API / claude.ai<br/><sub>Sonnet 5 / Opus 4.8 · 1M</sub>"]
     APP --> CODEX["OpenAI Codex adapter<br/><sub>GPT-5.5 / 5.4</sub>"]
     APP --> BR["AWS Bedrock"]
     APP --> VX["Google Vertex AI"]
@@ -164,18 +164,20 @@ Each provider has a dedicated, **tuned** launcher that maximizes its context win
 | `fexor-launch.sh` | Claude Opus 4.8 `[1m]` | **1M** | native subscription, adaptive thinking, 128K output |
 | `launch-claude-opus45.sh` | Claude Opus 4.8 `[1m]` | **1M** | OAuth-clean, `/model` picker entry |
 | `launch-gpt.sh` | GPT-5.5 (or 5.4) | 400K–1.05M | Codex adapter, `xhigh` reasoning, verbosity `medium` |
-| `launch.sh` | DeepSeek V4-Pro | **1M** | beta-strip for 3P fidelity, 64K output |
+| `launch-grok.sh` | Grok 4.5 | **500K** | xAI OAuth (`~/.grok/auth.json`) or `XAI_API_KEY`, Anthropic-compatible Messages |
+| `launch-deepseek.sh` | DeepSeek V4-Pro | **1M** | max effort, adaptive thinking, beta-strip for 3P fidelity, 64K output |
 | `launch-qwen37.sh` | Qwen 3.7-Max | **1M** | beta-strip, prompt caching preserved |
 
 > [!TIP]
-> Two source patches make this possible: `CLAUDE_CODE_MAX_CONTEXT_TOKENS` is honored in external builds (so third-party 1M models budget correctly instead of defaulting to 200K), and the latest Opus output ceiling was lifted to 128K. Details in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#model--provider-resolution)**.
+> Three source patches make this possible: first-party `sonnet` now resolves to Claude Sonnet 5 with native 1M context, `CLAUDE_CODE_MAX_CONTEXT_TOKENS` is honored in external builds (so third-party 1M models budget correctly instead of defaulting to 200K), and the latest Claude output ceilings are lifted to 128K where supported. Details in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#model--provider-resolution)**.
 
 <details>
 <summary><b>Context windows at a glance</b></summary>
 
 | Model | Context | Max output | Notes |
 |---|---:|---:|---|
-| Claude Opus 4.8 `[1m]` | 1,000,000 | 128,000 | native 1M beta |
+| Claude Sonnet 5 | 1,000,000 | 128,000 | native default, no `[1m]` required |
+| Claude Opus 4.8 `[1m]` | 1,000,000 | 128,000 | native 1M |
 | GPT-5.4 | 1,050,000 | 128,000 | xhigh reasoning |
 | GPT-5.5 | 1,000,000 (400K Codex) | — | strongest long-context |
 | DeepSeek V4-Pro | 1,048,576 | 384,000 | reasoning consumes context |
@@ -217,7 +219,7 @@ bun run build:dev:full   # → ./cli-dev (all experimental flags)
 ./cli -p "what files are here?"    # one-shot
 ./cli --model claude-opus-4-8      # specify model
 ./launch-gpt.sh                    # GPT-5.5 via Codex
-./launch.sh                        # DeepSeek V4-Pro (1M)
+./launch-deepseek.sh               # DeepSeek V4-Pro (1M, max effort)
 ./cli ps                           # list background sessions (BG_SESSIONS)
 ```
 
@@ -234,7 +236,7 @@ bun run build:dev:full   # → ./cli-dev (all experimental flags)
 |---|---|
 | `fexor-launch.sh`, `launch-claude-opus45.sh` | ✅ launch with `FEXOR_VOICE=1` |
 | `cli` / `cli-dev` after `/login` to claude.ai | ✅ |
-| `launch.sh` (DeepSeek), `launch-qwen37.sh` (Qwen), `launch-gpt.sh` (GPT) | ❌ transcription is claude.ai-only |
+| `launch-deepseek.sh` (DeepSeek), `launch-qwen37.sh` (Qwen), `launch-gpt.sh` (GPT) | ❌ transcription is claude.ai-only |
 
 **To use it:** `brew install sox`, then `FEXOR_VOICE=1 ./fexor-launch.sh`, `/login` to your claude.ai account, run `/voice`, and hold **Space** to talk. The `FEXOR_VOICE=1` flag loads user settings so the toggle persists — the Claude launchers are OAuth-clean and don't load them by default.
 
@@ -306,3 +308,293 @@ Built and maintained by **Profexor**.
 Source-available. The upstream Claude Code source remains the property of Anthropic. This repository carries no warranty.
 
 <div align="center"><sub>Maintained by <b>Profexor</b> · built with Bun · no telemetry, no callbacks home</sub></div>
+
+---
+
+## Digital Facial Prosthetic Training Pipeline
+
+`train_prosthetic.py` fine-tunes a pretrained StyleGAN2 face generator on a person's photo set, then trains a small expression network that maps facial Action Units and head pose into W+ style offsets. The output is a set of model weights for a separate inference pipeline.
+
+### Purpose
+
+The tool is designed for identity-preserving face synthesis from:
+
+- A photo collection of the subject.
+- A pretrained StyleGAN2 or StyleGAN2-ADA FFHQ generator checkpoint.
+- Optional pre-injury video used to learn expression variation.
+
+It produces:
+
+- A tuned generator.
+- The subject's canonical identity latent.
+- An Action Unit driven expression hypernetwork.
+- Live-mode FP16 and batch-mode FP32 export bundles.
+
+### Architecture
+
+```text
+Phase 1: Curate
+  Input photos -> face selection -> quality filters -> lighting normalization -> aligned 1024x1024 images
+
+Phase 2: Invert
+  Aligned photos -> batched W+ optimization -> inverted_latents.pt
+
+Phase 3: Tune
+  Real aligned photos + W+ latents -> PTI fine-tuning -> validation metrics -> checkpoints
+
+Phase 4: Expression
+  Video frames -> FaceMesh landmark blendshape proxy -> 17 Action Units -> expression hypernetwork
+
+Phase 5: Export
+  Tuned generator + identity latent + hypernetwork -> live and batch inference bundles
+```
+
+### Implemented improvements
+
+| Area | What was added | Benefit |
+|---|---|---|
+| Mixed precision | CUDA AMP with GradScaler | Faster training and lower memory use on CUDA GPUs |
+| Batched inversion | Independent W+ variables optimized in batches | Better GPU utilization during Phase 2 |
+| Validation split | Stratified holdout from photo-latent pairs | Detects overfitting during PTI |
+| Early stopping | Stops PTI after validation stagnation | Prevents wasted epochs and overfitting |
+| Gradient accumulation | Configurable effective batch size | More stable PTI updates |
+| Structured logging | `train.log` plus `metrics.jsonl` | Persistent run logs and comparable metrics |
+| Config files | `--config` with JSON or YAML | Reproducible runs without long CLI commands |
+| Dataset manifest | SHA-256 hashes for source and aligned photos | Auditable dataset versioning |
+| HEIC/HEIF support | Optional `pillow-heif` decoding | Supports modern iPhone exports |
+| Multi-face handling | Selects largest/most-centered detected face | Recovers useful group photos |
+| Occlusion guard | Key landmark visibility check | Rejects low-confidence face detections |
+| Lighting normalization | Histogram match to best identity anchor | Reduces lighting variance before inversion |
+| Quality metrics | FID/KID-style proxy metrics from embedding features | Tracks whether tuning improves or degrades outputs |
+
+### Improvements intentionally deferred
+
+These are valuable, but they are larger projects or require external model assets:
+
+| Item | Reason deferred |
+|---|---|
+| Full discriminator training with R1 | Needs a complete real/fake discriminator optimization loop and careful StyleGAN2-specific stability tuning |
+| Encoder-based inversion | Requires training or integrating e4e/pSp and synthetic pair generation |
+| Hypernetwork latent targets from video inversion | Best implemented after encoder-based inversion exists |
+| FLAME/DECA/MICA fitting | Requires external 3D fitting models and clinical mesh labels |
+| ONNX/TensorRT/CoreML export | Belongs to the separate inference/runtime pipeline |
+| Age conditioning | Requires age labels or a pretrained age estimator |
+| Membership inference detection | Useful privacy audit, but separate from core training |
+| Multi-GPU distributed training | Operational scale feature, not needed before single-GPU path is stable |
+
+### Environment setup
+
+Use the project venv:
+
+```bash
+cd /Users/sharan/Desktop/Github/fexor-code-main
+/usr/bin/python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-prosthetic.txt
+```
+
+The venv is ignored by git through `.gitignore`.
+
+### Required inputs
+
+```text
+data/
+  david_photos/
+    photo001.jpg
+    photo002.heic
+    ...
+  david_training_video/
+    clip001.mp4
+    clip002.mov
+    ...
+pretrained/
+  stylegan2-ffhq-1024x1024.pkl
+```
+
+Supported photo formats:
+
+```text
+.jpg .jpeg .png .tiff .tif .bmp .heic .heif
+```
+
+HEIC and HEIF require `pillow-heif`, included in `requirements-prosthetic.txt`.
+
+### Run with a config file
+
+Copy the example config and edit paths:
+
+```bash
+cp prosthetic_config.example.yaml prosthetic_config.yaml
+```
+
+Run the full pipeline:
+
+```bash
+source .venv/bin/activate
+python train_prosthetic.py --config prosthetic_config.yaml
+```
+
+Run inversion only:
+
+```bash
+python train_prosthetic.py --config prosthetic_config.yaml --phase inversion_only
+```
+
+Resume from a checkpoint directory:
+
+```bash
+python train_prosthetic.py --config prosthetic_config.yaml --resume model_weights/david_v1
+```
+
+Resume from a specific checkpoint:
+
+```bash
+python train_prosthetic.py --config prosthetic_config.yaml --resume model_weights/david_v1/pti_epoch_0050.pth
+```
+
+Disable AMP:
+
+```bash
+python train_prosthetic.py --config prosthetic_config.yaml --no_amp
+```
+
+Override a config value from CLI:
+
+```bash
+python train_prosthetic.py --config prosthetic_config.yaml --device cuda:1 --name david_v2
+```
+
+### Run with CLI arguments only
+
+```bash
+source .venv/bin/activate
+python train_prosthetic.py \
+  --photos_dir ./data/david_photos \
+  --video_dir ./data/david_training_video \
+  --stylegan_ckpt ./pretrained/stylegan2-ffhq-1024x1024.pkl \
+  --output_dir ./model_weights \
+  --name david_v1 \
+  --device cuda
+```
+
+### Configuration reference
+
+Most values can be set in `prosthetic_config.example.yaml` or overridden by CLI where an argument exists.
+
+| Field | Default | Purpose |
+|---|---:|---|
+| `photos_dir` | `./data/david_photos` | Raw subject photos |
+| `video_dir` | `./data/david_training_video` | Optional expression video directory |
+| `stylegan_ckpt` | `./pretrained/stylegan2-ffhq-1024x1024.pkl` | Pretrained StyleGAN2 checkpoint |
+| `output_dir` | `./model_weights` | Parent output directory |
+| `run_name` | `david_v1` | Run directory name |
+| `image_size` | `1024` | Alignment/export training resolution |
+| `identity_anchor_count` | `40` | Best frontal neutral photos used for identity center |
+| `max_faces` | `6` | Maximum faces to inspect per photo |
+| `min_landmark_visibility` | `0.5` | Occlusion rejection threshold |
+| `inversion_steps` | `500` | W+ optimization steps per batch |
+| `batch_size` | `4` | Batched inversion size |
+| `pti_epochs` | `350` | PTI training epochs |
+| `grad_accum_steps` | `4` | Effective PTI batch size multiplier |
+| `validation_split` | `0.15` | Holdout fraction for validation LPIPS |
+| `early_stop_patience` | `50` | PTI epochs without improvement before stopping |
+| `amp` | `true` | CUDA mixed precision |
+| `enable_lighting_normalization` | `true` | Histogram matching to identity anchor |
+| `enable_quality_metrics` | `true` | FID/KID-style proxy metrics |
+| `phase` | `full` | `full` or `inversion_only` |
+
+### Output structure
+
+```text
+model_weights/david_v1/
+  aligned/
+    identity_anchor/
+    expression_variant/
+    profile_supplement/
+  batch/
+    stylegan_david_fp32.pth
+    hypernetwork_fp32.pth
+    w_david_identity_fp32.pt
+  live/
+    stylegan_david_fp16.pth
+    hypernetwork_fp16.pth
+    w_david_identity_fp16.pt
+  viz/
+  stylegan_david.pth
+  w_david_identity.pt
+  hypernetwork.pth
+  flame_david.npz
+  burn_labels.npy
+  inverted_latents.pt
+  pti_best.pth
+  pti_epoch_*.pth
+  hypernetwork_epoch_*.pth
+  config.json
+  resolved_config.json
+  dataset_manifest.json
+  dataset_manifest.sha256
+  metrics.jsonl
+  train.log
+```
+
+### Logs and metrics
+
+`train.log` is the human-readable run log.
+
+`metrics.jsonl` contains one JSON object per metric event. Typical records include:
+
+```json
+{"phase":"pti","epoch":10,"loss":0.42,"adv_loss":0.01,"locality_loss":0.03,"val_lpips":0.38,"lr":0.000009}
+{"phase":"quality","fid_proxy":12.4,"kid_proxy":0.013}
+```
+
+`dataset_manifest.json` records source paths, aligned paths, and SHA-256 hashes. `dataset_manifest.sha256` hashes the manifest itself.
+
+### Validation smoke check
+
+After setup, run:
+
+```bash
+source .venv/bin/activate
+python -m py_compile train_prosthetic.py
+python - <<'PY'
+import torch
+from train_prosthetic import ExpressionHypernetwork, _blendshapes_to_au_tensor
+
+hp = ExpressionHypernetwork(au_input_dim=17, pose_input_dim=3)
+deltas = hp(torch.randn(17), torch.randn(3))
+assert deltas.shape == (18, 512)
+assert torch.allclose(deltas[8:], torch.zeros_like(deltas[8:]))
+assert _blendshapes_to_au_tensor(torch.rand(52)).shape == (17,)
+print('prosthetic smoke check passed')
+PY
+```
+
+### Changelog
+
+Current prosthetic training changes:
+
+- Added project venv support through `.gitignore` and `requirements-prosthetic.txt`.
+- Added `prosthetic_config.example.yaml` for reproducible config-driven runs.
+- Added structured logging to `train.log` and metrics logging to `metrics.jsonl`.
+- Added JSON/YAML config loading through `--config`.
+- Added batched inversion for Phase 2.
+- Added CUDA AMP support with `--no_amp` override.
+- Added PTI validation split and early stopping.
+- Added gradient accumulation for PTI.
+- Added lighting normalization before aligned images are written.
+- Added HEIC/HEIF support through `pillow-heif`.
+- Added multi-face selection and landmark visibility rejection.
+- Added dataset manifest and manifest hash.
+- Added FID/KID-style proxy metrics after PTI.
+- Added complete handover notes in `docs/PROSTHETIC_HANDOVER.md`.
+
+### Related documentation
+
+- [docs/PROSTHETIC_HANDOVER.md](docs/PROSTHETIC_HANDOVER.md) - implementation handover and verification checklist
+- [FEATURES.md](FEATURES.md) - full feature-flag audit for the Fexor Code CLI
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - Fexor Code architecture deep dive
+- [CHANGELOG.md](CHANGELOG.md) - repository release history
+- [CONTRIBUTING.md](CONTRIBUTING.md) - build system and reconstruction workflow
+- [SECURITY.md](SECURITY.md) - responsible disclosure guidance

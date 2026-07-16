@@ -7,6 +7,12 @@ Claude Code snapshot version, currently `2.1.87`).
 
 ## [Unreleased]
 
+### Added — Claude Sonnet 5 support
+
+- Added Claude Sonnet 5 (`claude-sonnet-5`) to the model registry, first-party Sonnet default, `/model` picker, public display names, pricing, commit attribution, hook examples, and bundled agent templates.
+- Configured Sonnet 5 as native 1M context with no `[1m]` suffix or context beta required, plus 32K default / 128K upper output tokens.
+- Added Sonnet 5 adaptive-thinking, effort, structured-output, context-management, and sampling-parameter safeguards so runtime requests avoid removed manual thinking budgets and non-default sampling parameters.
+
 ### Added — Reconstructed feature flags (13)
 
 The leaked source snapshot referenced feature flags whose implementation files
@@ -37,6 +43,7 @@ exact existing call-site contracts, verified per-flag, and shipped in `cli-dev`.
 ### Added — Provider launchers & tuning
 
 - Tuned per-provider launchers for DeepSeek V4-Pro, Qwen 3.7-Max, GPT-5.4/5.5, and Claude Opus 4.8 — each maximizing its true context window (up to 1M) and tool-use fidelity.
+- Renamed the DeepSeek launcher from `launch.sh` to `launch-deepseek.sh` and defaulted it to max effort with adaptive thinking.
 - `launch-gpt.sh` now defaults to GPT-5.5 (switchable), maps `max` effort to `xhigh`, sets verbosity to `medium`, and accounts the correct context window per model.
 - Third-party launchers now set `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` and `DISABLE_INTERLEAVED_THINKING=1` to strip Anthropic-proprietary betas / experimental tool-schema fields that core-Messages endpoints reject.
 

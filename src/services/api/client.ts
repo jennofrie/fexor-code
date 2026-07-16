@@ -35,7 +35,7 @@ import {
   getVertexRegionForModel,
   isEnvTruthy,
 } from '../../utils/envUtils.js'
-import { createCodexFetch } from './codex-fetch-adapter.js'
+import { createCodexFetch, createSakanaFetch } from './codex-fetch-adapter.js'
 
 /**
  * Environment variables for different client types:
@@ -303,6 +303,23 @@ export async function getAnthropicClient({
     }
     // we have always been lying about the return type - this doesn't support batching or models
     return new AnthropicVertex(vertexArgs) as unknown as Anthropic
+  }
+
+  // ── Sakana Fugu provider via OpenAI-compatible Responses adapter ─────
+  if (isEnvTruthy(process.env.CLAUDE_CODE_USE_SAKANA_FUGU)) {
+    const sakanaApiKey = process.env.SAKANA_API_KEY || process.env.FUGU_API_KEY || ''
+    const sakanaFetch = createSakanaFetch(
+      sakanaApiKey,
+      (resolvedFetch ?? globalThis.fetch) as typeof globalThis.fetch,
+      process.env.SAKANA_BASE_URL || process.env.FUGU_BASE_URL,
+    )
+    const clientConfig: ConstructorParameters<typeof Anthropic>[0] = {
+      apiKey: 'sakana-placeholder', // SDK requires a key; the fetch adapter handles auth
+      ...ARGS,
+      fetch: sakanaFetch as unknown as typeof globalThis.fetch,
+      ...(isDebugToStdErr() && { logger: createStderrLogger() }),
+    }
+    return new Anthropic(clientConfig)
   }
 
   // ── Codex (OpenAI) provider via fetch adapter ─────────────────────

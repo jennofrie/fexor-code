@@ -26,6 +26,10 @@ export type EffortValue = EffortLevel | number
 const DEFAULT_GPT_EFFORT: EffortLevel = 'max'
 const GPT_DEFAULT_EFFORT_ENV = 'CLAUDE_CODE_GPT_DEFAULT_EFFORT'
 
+function isGlm52Model(model: string): boolean {
+  return model.toLowerCase().includes('glm-5.2')
+}
+
 // @[MODEL LAUNCH]: Add the new model to the allowlist if it supports the effort parameter.
 export function modelSupportsEffort(model: string): boolean {
   const m = model.toLowerCase()
@@ -38,6 +42,7 @@ export function modelSupportsEffort(model: string): boolean {
   }
   // Supported by a subset of Claude 4 models
   if (
+    m.includes('sonnet-5') ||
     m.includes('opus-4-6') ||
     m.includes('opus-4-5') ||
     m.includes('sonnet-4-6')
@@ -53,6 +58,9 @@ export function modelSupportsEffort(model: string): boolean {
   // to the explicit OpenAI provider so Anthropic-compatible GPT-shaped routes
   // do not inherit Codex semantics.
   if (getAPIProvider() === 'openai' && m.startsWith('gpt-5')) {
+    return true
+  }
+  if (getAPIProvider() === 'sakana' && m.startsWith('fugu')) {
     return true
   }
 
@@ -73,16 +81,26 @@ export function modelSupportsMaxEffort(model: string): boolean {
   if (supported3P !== undefined) {
     return supported3P
   }
+  if (isGlm52Model(model)) {
+    return true
+  }
+  if (model.toLowerCase().startsWith('deepseek-v4')) {
+    return true
+  }
   if (getAPIProvider() === 'openai' && model.toLowerCase().startsWith('gpt-5')) {
     return true
   }
-	  const m = model.toLowerCase()
-	  if (
-	    m.includes('opus-4-6') ||
-	    m.includes('sonnet-4-6')
-	  ) {
-	    return true
-	  }
+  if (getAPIProvider() === 'sakana' && model.toLowerCase().startsWith('fugu')) {
+    return true
+  }
+  const m = model.toLowerCase()
+  if (
+    m.includes('sonnet-5') ||
+    m.includes('opus-4-6') ||
+    m.includes('sonnet-4-6')
+  ) {
+    return true
+  }
   if (process.env.USER_TYPE === 'ant' && resolveAntModel(model)) {
     return true
   }
@@ -347,6 +365,10 @@ export function getDefaultEffortForModel(
     return 'high'
   }
 
+  if (model.toLowerCase().includes('sonnet-5')) {
+    return undefined
+  }
+
   // Sonnet 4.6 should run implementation sessions at max reasoning without
   // requiring the operator to type "ultrathink" every turn.
   if (model.toLowerCase().includes('sonnet-4-6')) {
@@ -369,6 +391,10 @@ export function getDefaultEffortForModel(
 
   if (getAPIProvider() === 'openai' && model.toLowerCase().startsWith('gpt-5')) {
     return getGptDefaultEffortFromEnv()
+  }
+
+  if (isGlm52Model(model)) {
+    return 'max'
   }
 
   // When ultrathink feature is on, default effort to medium (ultrathink bumps to high)

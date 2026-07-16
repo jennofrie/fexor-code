@@ -54,13 +54,13 @@ else
 fi
 
 # Context-window accounting (client-side only; sets when auto-compact fires). gpt-5.4
-# already gets 1.05M from the code, but gpt-5.5 has NO entry and would default to 200K
-# (premature compaction). Pin gpt-5.5 to its *Codex* window of 400K so compaction stays
-# within what the Codex backend accepts. Honored after the un-gate patch.
+# already gets 1.05M from the code, but gpt-5.5 has NO entry and would default to
+# 200K (premature compaction). Request a 1M client-side window for gpt-5.5; the
+# backend still enforces the actual model/provider context limit.
 if [ -z "${CLAUDE_CODE_MAX_CONTEXT_TOKENS+x}" ]; then
   case "$ANTHROPIC_MODEL" in
     gpt-5.5|gpt-5.5-*)
-      export CLAUDE_CODE_MAX_CONTEXT_TOKENS=400000
+      export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000
       ;;
   esac
 fi
