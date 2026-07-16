@@ -45,6 +45,10 @@ exact existing call-site contracts, verified per-flag, and shipped in `cli-dev`.
 - `CLAUDE_CODE_MAX_CONTEXT_TOKENS` is now honored in external builds (was gated to `USER_TYPE === 'ant'`), so third-party 1M-context models budget correctly instead of defaulting to a 200K window. It remains a purely client-side budgeting value and is never sent to any provider.
 - Added output-token entries for Opus 4.7/4.8 (64K default / 128K upper) — the latest Claude was previously capped at 32K output by an outdated table.
 
+### Changed — Cyber-risk Read injection removed
+
+- Removed the hardcoded `CYBER_RISK_MITIGATION_REMINDER` (plus its `MITIGATION_EXEMPT_MODELS` gate and the now-unused `model.js` import) that was appended to every `Read` tool result. Inherited from the upstream Anthropic snapshot, it had survived the "guardrails removed" fork despite the stated posture — it is now actually stripped. File reads return content with no trailing reminder block; no launcher or other tool is affected. Verified absent from both `cli` and `cli-dev` after rebuild; both binaries boot clean.
+
 ### Documentation
 
 - Rewrote `README.md` (architecture/flag/provider diagrams, reconstruction status, badges).
