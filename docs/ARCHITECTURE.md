@@ -19,12 +19,12 @@ flowchart TD
 
 Registries assembled at bootstrap and consumed by the loop:
 
-| Registry | Provides |
-|---|---|
+| Registry                                   | Provides                                                 |
+| ------------------------------------------ | -------------------------------------------------------- |
 | `tools.ts` (`getTools`/`assembleToolPool`) | agent tools (Bash, Read, Edit, MCP, reconstructed tools) |
-| `commands.ts` (`getCommands`) | slash commands |
-| `tasks.ts` (`getAllTasks`) | background task types |
-| `utils/permissions/permissions.ts` | the permission decision gate |
+| `commands.ts` (`getCommands`)              | slash commands                                           |
+| `tasks.ts` (`getAllTasks`)                 | background task types                                    |
+| `utils/permissions/permissions.ts`         | the permission decision gate                             |
 
 ## The feature-flag system
 
@@ -50,15 +50,16 @@ flowchart LR
 
 ## Subsystems
 
-| Directory | Purpose |
-|---|---|
-| `services/` | API clients (`api/claude.ts`, `withRetry`), OAuth/MCP, compaction (`autoCompact`, `microCompact`, `reactiveCompact`, `snipCompact`), analytics **stubs** |
-| `services/api/codex-fetch-adapter.ts` | translates Anthropic Messages → OpenAI Responses for GPT/Codex |
-| `utils/model/` | provider routing, context-window/output/effort resolution, capability overrides |
-| `state/` | single app store (REPL + permission gate) |
-| `hooks/` · `components/` | Ink UI |
-| `bridge/` · `remote/` · `coordinator/` | remote-control / multi-agent surfaces (mostly experimental) |
-| `skills/` · `plugins/` · `voice/` · `tasks/` | extension surfaces |
+| Directory                                    | Purpose                                                                                                                                                  |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `services/`                                  | API clients (`api/claude.ts`, `withRetry`), OAuth/MCP, compaction (`autoCompact`, `microCompact`, `reactiveCompact`, `snipCompact`), analytics **stubs** |
+| `services/api/codex-fetch-adapter.ts`        | translates Anthropic Messages → OpenAI Responses for GPT/Codex                                                                                           |
+| `services/api/nvidia-chat-adapter.ts`        | translates Anthropic Messages ↔ NVIDIA Chat Completions and enforces GLM-5.2, DeepSeek V4-Pro/Flash, and MiniMax M3 limits/reasoning profiles            |
+| `utils/model/`                               | provider routing, context-window/output/effort resolution, capability overrides                                                                          |
+| `state/`                                     | single app store (REPL + permission gate)                                                                                                                |
+| `hooks/` · `components/`                     | Ink UI                                                                                                                                                   |
+| `bridge/` · `remote/` · `coordinator/`       | remote-control / multi-agent surfaces (mostly experimental)                                                                                              |
+| `skills/` · `plugins/` · `voice/` · `tasks/` | extension surfaces                                                                                                                                       |
 
 ## Model & provider resolution
 
@@ -70,6 +71,7 @@ has important consequences for third-party endpoints.
 flowchart TD
     REQ["request (Anthropic Messages)"] --> P{getAPIProvider}
     P -->|"CLAUDE_CODE_USE_OPENAI"| CODEX["codex-fetch-adapter<br/><sub>→ OpenAI Responses</sub>"]
+    P -->|"CLAUDE_CODE_USE_NVIDIA"| NVIDIA["nvidia-chat-adapter<br/><sub>→ NVIDIA Chat Completions</sub>"]
     P -->|"bedrock / vertex / foundry"| CLOUD["cloud SDK"]
     P -->|"else (incl. 3P base URL)"| FP["'firstParty' path<br/><sub>native Anthropic body</sub>"]
     FP --> EP{base URL}
@@ -99,6 +101,17 @@ Resolved in `utils/context.ts:getContextWindowForModel`, in precedence order:
 overrides up to the per-model upper limit. Claude Sonnet 5 is configured as
 32K default / 128K upper, and Opus 4.7/4.8 were patched to 64K/128K
 (previously capped at 32K).
+
+The NVIDIA adapter performs a second provider-side clamp. Hosted GLM-5.2 uses a
+16,384-token default and a 32,768-token maximum. DeepSeek V4-Pro, DeepSeek
+V4-Flash, and MiniMax M3 are capped at 16,384. The two DeepSeek profiles send
+`reasoning_effort=max`; MiniMax M3 sends
+`chat_template_kwargs.thinking_mode=adaptive`, its strongest automatic mode.
+
+The direct DeepSeek launcher uses the stable hosted model ID
+`deepseek-v4-pro`, which resolves to DeepSeek V4-Pro-0813 as of 2026-08-13.
+It reserves 64K output tokens by default and permits an explicit 384K maximum
+through `DEEPSEEK_MAX_OUTPUT_TOKENS=384000`.
 
 ### Third-party fidelity
 

@@ -29,12 +29,12 @@
 
 A clean, buildable fork of Anthropic's [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI — the terminal-native AI coding agent. The upstream source became publicly available on **March 31, 2026** through a source-map exposure in the npm distribution. `fexor-code` applies four categories of work on top of that snapshot:
 
-| | Category | What it means |
-|:--:|---|---|
-| 🛰️ | **Telemetry removed** | OpenTelemetry/gRPC, GrowthBook reporting, Sentry, and event logging are dead-code-eliminated or stubbed. GrowthBook gates still evaluate locally (needed for runtime feature flags) but **never report home**. |
-| 🔓 | **Guardrails removed** | The CLI's prompt-level refusal patterns, injected "cyber-risk" blocks, and managed-settings overlays are stripped. The model's own safety training still applies — this only removes the extra wrapper layer. |
-| 🧪 | **Experimental features unlocked** | Claude Code ships **88** `bun:bundle` compile-time feature flags, most disabled in the public release. The full build enables a curated set. |
-| 🧩 | **Missing features reconstructed** | The leaked snapshot was missing source files for dozens of flags. **13 of them have been rebuilt** to their original call-site contracts and verified to compile + boot. → [Reconstruction status](#-reconstruction-status) |
+|     | Category                           | What it means                                                                                                                                                                                                               |
+| :-: | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🛰️  | **Telemetry removed**              | OpenTelemetry/gRPC, GrowthBook reporting, Sentry, and event logging are dead-code-eliminated or stubbed. GrowthBook gates still evaluate locally (needed for runtime feature flags) but **never report home**.              |
+| 🔓  | **Guardrails removed**             | The CLI's prompt-level refusal patterns, injected "cyber-risk" blocks, and managed-settings overlays are stripped. The model's own safety training still applies — this only removes the extra wrapper layer.               |
+| 🧪  | **Experimental features unlocked** | Claude Code ships **88** `bun:bundle` compile-time feature flags, most disabled in the public release. The full build enables a curated set.                                                                                |
+| 🧩  | **Missing features reconstructed** | The leaked snapshot was missing source files for dozens of flags. **13 of them have been rebuilt** to their original call-site contracts and verified to compile + boot. → [Reconstruction status](#-reconstruction-status) |
 
 > [!NOTE]
 > `fexor-code` is a **nominative fork** — it references "Claude Code" only to describe what it forks. It is maintained independently by **Profexor** and is not affiliated with or endorsed by Anthropic.
@@ -82,12 +82,12 @@ flowchart LR
     style DEV fill:#3b0764,stroke:#8b5cf6,color:#fff
 ```
 
-| | `./cli` — **stable** | `./cli-dev` — **unreleased** |
-|---|---|---|
-| Build | `bun run build` | `bun run build:dev:full` |
-| Flags compiled in | `VOICE_MODE` only | **49** experimental flags |
-| Defines | `USER_TYPE=external` | + `CLAUDE_CODE_EXPERIMENTAL_BUILD=true` |
-| Posture | Production-like, minimal surface | Everything unlocked + reconstructed |
+|                   | `./cli` — **stable**             | `./cli-dev` — **unreleased**            |
+| ----------------- | -------------------------------- | --------------------------------------- |
+| Build             | `bun run build`                  | `bun run build:dev:full`                |
+| Flags compiled in | `VOICE_MODE` only                | **49** experimental flags               |
+| Defines           | `USER_TYPE=external`             | + `CLAUDE_CODE_EXPERIMENTAL_BUILD=true` |
+| Posture           | Production-like, minimal surface | Everything unlocked + reconstructed     |
 
 Build is **fast** — a full `cli-dev` is ~4 s (≈5,700 modules bundled + bytecode-compiled by Bun).
 
@@ -125,13 +125,14 @@ pie showData
 <details>
 <summary><b>Deferred on purpose</b> (reconstructable, but not shipped on-by-default)</summary>
 
-| Flag | Why deferred |
-|---|---|
-| `MEMORY_SHAPE_TELEMETRY` | Telemetry — against this fork's no-telemetry posture |
-| `OVERFLOW_TEST_TOOL` | Test scaffolding only, no user value |
-| `TRANSCRIPT_CLASSIFIER` | The auto-approve permission classifier — a safety boundary that should be **opt-in** |
-| `DIRECT_CONNECT` | Needs the full `claude server` subsystem (L/XL); `parseConnectUrl.ts` groundwork is already in place |
-| `KAIROS` · `PROACTIVE` · `KAIROS_DREAM` | Large always-on assistant stacks; backend-coupled |
+| Flag                                    | Why deferred                                                                                         |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `MEMORY_SHAPE_TELEMETRY`                | Telemetry — against this fork's no-telemetry posture                                                 |
+| `OVERFLOW_TEST_TOOL`                    | Test scaffolding only, no user value                                                                 |
+| `TRANSCRIPT_CLASSIFIER`                 | The auto-approve permission classifier — a safety boundary that should be **opt-in**                 |
+| `DIRECT_CONNECT`                        | Needs the full `claude server` subsystem (L/XL); `parseConnectUrl.ts` groundwork is already in place |
+| `KAIROS` · `PROACTIVE` · `KAIROS_DREAM` | Large always-on assistant stacks; backend-coupled                                                    |
+
 </details>
 
 Full audit of all 88 flags → **[FEATURES.md](FEATURES.md)**.
@@ -140,7 +141,7 @@ Full audit of all 88 flags → **[FEATURES.md](FEATURES.md)**.
 
 ## 🌐 Model providers
 
-`fexor-code` speaks the Anthropic Messages format internally and routes it to **seven** backends. Third-party Anthropic-compatible endpoints pass through natively; OpenAI/Codex goes through a translation adapter.
+`fexor-code` speaks the Anthropic Messages format internally and routes it to multiple backends. Third-party Anthropic-compatible endpoints pass through natively; OpenAI/Codex, Sakana, and NVIDIA use protocol translation adapters.
 
 ```mermaid
 flowchart LR
@@ -150,8 +151,11 @@ flowchart LR
     APP --> BR["AWS Bedrock"]
     APP --> VX["Google Vertex AI"]
     APP --> FD["Anthropic Foundry"]
-    APP --> DS["DeepSeek V4-Pro<br/><sub>api.deepseek.com/anthropic · 1M</sub>"]
+    APP --> DS["DeepSeek V4-Pro-0813<br/><sub>api.deepseek.com/anthropic · 1M</sub>"]
     APP --> QW["Qwen 3.7-Max<br/><sub>Alibaba Model Studio · 1M</sub>"]
+    APP --> GROK["xAI Grok<br/><sub>Anthropic-compatible Messages</sub>"]
+    APP --> SK["Sakana Fugu<br/><sub>OpenAI Responses</sub>"]
+    APP --> NV["NVIDIA NIM<br/><sub>GLM-5.2 · DeepSeek V4 · MiniMax M3 · 1M</sub>"]
 
     style APP fill:#1e1b4b,stroke:#8b5cf6,color:#fff
     style ANT fill:#3b0764,stroke:#ec4899,color:#fff
@@ -159,14 +163,40 @@ flowchart LR
 
 Each provider has a dedicated, **tuned** launcher that maximizes its context window and tool-use fidelity:
 
-| Launcher | Model | Context window | Highlights |
-|---|---|---:|---|
-| `fexor-launch.sh` | Claude Opus 4.8 `[1m]` | **1M** | native subscription, adaptive thinking, 128K output |
-| `launch-claude-opus45.sh` | Claude Opus 4.8 `[1m]` | **1M** | OAuth-clean, `/model` picker entry |
-| `launch-gpt.sh` | GPT-5.5 (or 5.4) | 400K–1.05M | Codex adapter, `xhigh` reasoning, verbosity `medium` |
-| `launch-grok.sh` | Grok 4.5 | **500K** | xAI OAuth (`~/.grok/auth.json`) or `XAI_API_KEY`, Anthropic-compatible Messages |
-| `launch-deepseek.sh` | DeepSeek V4-Pro | **1M** | max effort, adaptive thinking, beta-strip for 3P fidelity, 64K output |
-| `launch-qwen37.sh` | Qwen 3.7-Max | **1M** | beta-strip, prompt caching preserved |
+| Launcher                  | Model                                      | Context window | Highlights                                                                                |
+| ------------------------- | ------------------------------------------ | -------------: | ----------------------------------------------------------------------------------------- |
+| `fexor-launch.sh`         | Claude Opus 4.8 `[1m]`                     |         **1M** | native subscription, adaptive thinking, 128K output                                       |
+| `launch-claude-opus45.sh` | Claude Opus 4.8 `[1m]`                     |         **1M** | OAuth-clean, `/model` picker entry                                                        |
+| `launch-gpt.sh`           | GPT-5.5 (or 5.4)                           |     400K–1.05M | Codex adapter, `xhigh` reasoning, verbosity `medium`                                      |
+| `launch-grok.sh`          | Grok 4.5                                   |       **500K** | xAI OAuth (`~/.grok/auth.json`) or `XAI_API_KEY`, Anthropic-compatible Messages           |
+| `launch-fugu.sh`          | Sakana Fugu                                |         **1M** | OpenAI Responses adapter, isolated API-key config                                         |
+| `launch-nvidia.sh`        | GLM-5.2, DeepSeek V4-Pro/Flash, MiniMax M3 |         **1M** | NVIDIA free hosted NIM; model profiles, Keychain-backed API key, Chat Completions adapter |
+| `launch-deepseek.sh`      | DeepSeek V4-Pro-0813                       |         **1M** | stable hosted alias, max effort, 64K default / 384K maximum output                        |
+| `launch-qwen37.sh`        | Qwen 3.7-Max                               |         **1M** | beta-strip, prompt caching preserved                                                      |
+
+The NVIDIA launcher accepts either a short profile name or the exact NIM model
+ID:
+
+```bash
+./launch-nvidia.sh                         # GLM-5.2
+./launch-nvidia.sh --model deepseek-pro
+./launch-nvidia.sh --model deepseek-flash
+./launch-nvidia.sh --model minimax-m3
+```
+
+| NVIDIA profile                  | Reasoning control        |                         Output |
+| ------------------------------- | ------------------------ | -----------------------------: |
+| `z-ai/glm-5.2`                  | model-native             | 16,384 default; 32,768 maximum |
+| `deepseek-ai/deepseek-v4-pro`   | `reasoning_effort=max`   |                 16,384 maximum |
+| `deepseek-ai/deepseek-v4-flash` | `reasoning_effort=max`   |                 16,384 maximum |
+| `minimaxai/minimax-m3`          | `thinking_mode=adaptive` |                 16,384 maximum |
+
+MiniMax M3 exposes enabled, disabled, and adaptive thinking—not an effort tier
+named `max`. The launcher therefore uses adaptive mode and does not send an
+unsupported max value. All four profiles budget a 1,000,000-token context.
+On macOS the launcher reads the `nvidia_api_key` Keychain service. On Linux it
+reads `~/.config/fexor-code/nvidia_api_key` and refuses the file unless it is a
+regular, non-symlinked file with `0600` permissions.
 
 > [!TIP]
 > Three source patches make this possible: first-party `sonnet` now resolves to Claude Sonnet 5 with native 1M context, `CLAUDE_CODE_MAX_CONTEXT_TOKENS` is honored in external builds (so third-party 1M models budget correctly instead of defaulting to 200K), and the latest Claude output ceilings are lifted to 128K where supported. Details in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#model--provider-resolution)**.
@@ -174,14 +204,15 @@ Each provider has a dedicated, **tuned** launcher that maximizes its context win
 <details>
 <summary><b>Context windows at a glance</b></summary>
 
-| Model | Context | Max output | Notes |
-|---|---:|---:|---|
-| Claude Sonnet 5 | 1,000,000 | 128,000 | native default, no `[1m]` required |
-| Claude Opus 4.8 `[1m]` | 1,000,000 | 128,000 | native 1M |
-| GPT-5.4 | 1,050,000 | 128,000 | xhigh reasoning |
-| GPT-5.5 | 1,000,000 (400K Codex) | — | strongest long-context |
-| DeepSeek V4-Pro | 1,048,576 | 384,000 | reasoning consumes context |
-| Qwen 3.7-Max | 1,000,000 | 65,536 | agent-tuned, verbose |
+| Model                  |                Context | Max output | Notes                                                   |
+| ---------------------- | ---------------------: | ---------: | ------------------------------------------------------- |
+| Claude Sonnet 5        |              1,000,000 |    128,000 | native default, no `[1m]` required                      |
+| Claude Opus 4.8 `[1m]` |              1,000,000 |    128,000 | native 1M                                               |
+| GPT-5.4                |              1,050,000 |    128,000 | xhigh reasoning                                         |
+| GPT-5.5                | 1,000,000 (400K Codex) |          — | strongest long-context                                  |
+| DeepSeek V4-Pro-0813   |              1,000,000 |    384,000 | hosted as `deepseek-v4-pro`; reasoning consumes context |
+| Qwen 3.7-Max           |              1,000,000 |     65,536 | agent-tuned, verbose                                    |
+
 </details>
 
 ---
@@ -204,13 +235,13 @@ bun run build      # → ./cli       (stable)
 bun run build:dev:full   # → ./cli-dev (all experimental flags)
 ```
 
-| Command | Output | Features |
-|---|---|---|
-| `bun run build` | `./cli` | `VOICE_MODE` only |
-| `bun run build:dev` | `./cli-dev` | dev version stamp |
-| `bun run build:dev:full` | `./cli-dev` | **all 49 experimental flags** |
-| `bun run compile` | `./dist/cli` | alternative output path |
-| `bun run ./scripts/build.ts --feature=X` | custom | enable specific flags |
+| Command                                  | Output       | Features                      |
+| ---------------------------------------- | ------------ | ----------------------------- |
+| `bun run build`                          | `./cli`      | `VOICE_MODE` only             |
+| `bun run build:dev`                      | `./cli-dev`  | dev version stamp             |
+| `bun run build:dev:full`                 | `./cli-dev`  | **all 49 experimental flags** |
+| `bun run compile`                        | `./dist/cli` | alternative output path       |
+| `bun run ./scripts/build.ts --feature=X` | custom       | enable specific flags         |
 
 ## ▶️ Usage
 
@@ -232,10 +263,10 @@ bun run build:dev:full   # → ./cli-dev (all experimental flags)
 - 🎙️ **Recording** uses [SoX](http://sox.sourceforge.net/) (`brew install sox`) — provider-agnostic.
 - 🧠 **Transcription** uses Anthropic's `voice_stream` endpoint — **claude.ai-OAuth only** (not API keys, Bedrock, Vertex, Foundry, or OpenAI/Codex).
 
-| Launcher / binary | `/voice` |
-|---|---|
-| `fexor-launch.sh`, `launch-claude-opus45.sh` | ✅ launch with `FEXOR_VOICE=1` |
-| `cli` / `cli-dev` after `/login` to claude.ai | ✅ |
+| Launcher / binary                                                                 | `/voice`                           |
+| --------------------------------------------------------------------------------- | ---------------------------------- |
+| `fexor-launch.sh`, `launch-claude-opus45.sh`                                      | ✅ launch with `FEXOR_VOICE=1`     |
+| `cli` / `cli-dev` after `/login` to claude.ai                                     | ✅                                 |
 | `launch-deepseek.sh` (DeepSeek), `launch-qwen37.sh` (Qwen), `launch-gpt.sh` (GPT) | ❌ transcription is claude.ai-only |
 
 **To use it:** `brew install sox`, then `FEXOR_VOICE=1 ./fexor-launch.sh`, `/login` to your claude.ai account, run `/voice`, and hold **Space** to talk. The `FEXOR_VOICE=1` flag loads user settings so the toggle persists — the Claude launchers are OAuth-clean and don't load them by default.
@@ -260,14 +291,14 @@ docs/ARCHITECTURE.md       # architecture deep-dive
 
 ## 🧰 Tech stack
 
-| | |
-|---|---|
-| **Runtime** | [Bun](https://bun.sh) ≥ 1.3.11 |
-| **Language** | TypeScript 5.x |
-| **Terminal UI** | React 19 + [Ink](https://github.com/vadimdemedes/ink) |
-| **CLI parsing** | Commander.js · **Validation** Zod v4 |
-| **Protocols** | MCP · LSP |
-| **APIs** | Anthropic Messages · OpenAI Codex · Bedrock · Vertex · Foundry |
+|                 |                                                                |
+| --------------- | -------------------------------------------------------------- |
+| **Runtime**     | [Bun](https://bun.sh) ≥ 1.3.11                                 |
+| **Language**    | TypeScript 5.x                                                 |
+| **Terminal UI** | React 19 + [Ink](https://github.com/vadimdemedes/ink)          |
+| **CLI parsing** | Commander.js · **Validation** Zod v4                           |
+| **Protocols**   | MCP · LSP                                                      |
+| **APIs**        | Anthropic Messages · OpenAI Codex · Bedrock · Vertex · Foundry |
 
 ---
 
@@ -351,36 +382,36 @@ Phase 5: Export
 
 ### Implemented improvements
 
-| Area | What was added | Benefit |
-|---|---|---|
-| Mixed precision | CUDA AMP with GradScaler | Faster training and lower memory use on CUDA GPUs |
-| Batched inversion | Independent W+ variables optimized in batches | Better GPU utilization during Phase 2 |
-| Validation split | Stratified holdout from photo-latent pairs | Detects overfitting during PTI |
-| Early stopping | Stops PTI after validation stagnation | Prevents wasted epochs and overfitting |
-| Gradient accumulation | Configurable effective batch size | More stable PTI updates |
-| Structured logging | `train.log` plus `metrics.jsonl` | Persistent run logs and comparable metrics |
-| Config files | `--config` with JSON or YAML | Reproducible runs without long CLI commands |
-| Dataset manifest | SHA-256 hashes for source and aligned photos | Auditable dataset versioning |
-| HEIC/HEIF support | Optional `pillow-heif` decoding | Supports modern iPhone exports |
-| Multi-face handling | Selects largest/most-centered detected face | Recovers useful group photos |
-| Occlusion guard | Key landmark visibility check | Rejects low-confidence face detections |
-| Lighting normalization | Histogram match to best identity anchor | Reduces lighting variance before inversion |
-| Quality metrics | FID/KID-style proxy metrics from embedding features | Tracks whether tuning improves or degrades outputs |
+| Area                   | What was added                                      | Benefit                                            |
+| ---------------------- | --------------------------------------------------- | -------------------------------------------------- |
+| Mixed precision        | CUDA AMP with GradScaler                            | Faster training and lower memory use on CUDA GPUs  |
+| Batched inversion      | Independent W+ variables optimized in batches       | Better GPU utilization during Phase 2              |
+| Validation split       | Stratified holdout from photo-latent pairs          | Detects overfitting during PTI                     |
+| Early stopping         | Stops PTI after validation stagnation               | Prevents wasted epochs and overfitting             |
+| Gradient accumulation  | Configurable effective batch size                   | More stable PTI updates                            |
+| Structured logging     | `train.log` plus `metrics.jsonl`                    | Persistent run logs and comparable metrics         |
+| Config files           | `--config` with JSON or YAML                        | Reproducible runs without long CLI commands        |
+| Dataset manifest       | SHA-256 hashes for source and aligned photos        | Auditable dataset versioning                       |
+| HEIC/HEIF support      | Optional `pillow-heif` decoding                     | Supports modern iPhone exports                     |
+| Multi-face handling    | Selects largest/most-centered detected face         | Recovers useful group photos                       |
+| Occlusion guard        | Key landmark visibility check                       | Rejects low-confidence face detections             |
+| Lighting normalization | Histogram match to best identity anchor             | Reduces lighting variance before inversion         |
+| Quality metrics        | FID/KID-style proxy metrics from embedding features | Tracks whether tuning improves or degrades outputs |
 
 ### Improvements intentionally deferred
 
 These are valuable, but they are larger projects or require external model assets:
 
-| Item | Reason deferred |
-|---|---|
-| Full discriminator training with R1 | Needs a complete real/fake discriminator optimization loop and careful StyleGAN2-specific stability tuning |
-| Encoder-based inversion | Requires training or integrating e4e/pSp and synthetic pair generation |
-| Hypernetwork latent targets from video inversion | Best implemented after encoder-based inversion exists |
-| FLAME/DECA/MICA fitting | Requires external 3D fitting models and clinical mesh labels |
-| ONNX/TensorRT/CoreML export | Belongs to the separate inference/runtime pipeline |
-| Age conditioning | Requires age labels or a pretrained age estimator |
-| Membership inference detection | Useful privacy audit, but separate from core training |
-| Multi-GPU distributed training | Operational scale feature, not needed before single-GPU path is stable |
+| Item                                             | Reason deferred                                                                                            |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Full discriminator training with R1              | Needs a complete real/fake discriminator optimization loop and careful StyleGAN2-specific stability tuning |
+| Encoder-based inversion                          | Requires training or integrating e4e/pSp and synthetic pair generation                                     |
+| Hypernetwork latent targets from video inversion | Best implemented after encoder-based inversion exists                                                      |
+| FLAME/DECA/MICA fitting                          | Requires external 3D fitting models and clinical mesh labels                                               |
+| ONNX/TensorRT/CoreML export                      | Belongs to the separate inference/runtime pipeline                                                         |
+| Age conditioning                                 | Requires age labels or a pretrained age estimator                                                          |
+| Membership inference detection                   | Useful privacy audit, but separate from core training                                                      |
+| Multi-GPU distributed training                   | Operational scale feature, not needed before single-GPU path is stable                                     |
 
 ### Environment setup
 
@@ -482,27 +513,27 @@ python train_prosthetic.py \
 
 Most values can be set in `prosthetic_config.example.yaml` or overridden by CLI where an argument exists.
 
-| Field | Default | Purpose |
-|---|---:|---|
-| `photos_dir` | `./data/david_photos` | Raw subject photos |
-| `video_dir` | `./data/david_training_video` | Optional expression video directory |
-| `stylegan_ckpt` | `./pretrained/stylegan2-ffhq-1024x1024.pkl` | Pretrained StyleGAN2 checkpoint |
-| `output_dir` | `./model_weights` | Parent output directory |
-| `run_name` | `david_v1` | Run directory name |
-| `image_size` | `1024` | Alignment/export training resolution |
-| `identity_anchor_count` | `40` | Best frontal neutral photos used for identity center |
-| `max_faces` | `6` | Maximum faces to inspect per photo |
-| `min_landmark_visibility` | `0.5` | Occlusion rejection threshold |
-| `inversion_steps` | `500` | W+ optimization steps per batch |
-| `batch_size` | `4` | Batched inversion size |
-| `pti_epochs` | `350` | PTI training epochs |
-| `grad_accum_steps` | `4` | Effective PTI batch size multiplier |
-| `validation_split` | `0.15` | Holdout fraction for validation LPIPS |
-| `early_stop_patience` | `50` | PTI epochs without improvement before stopping |
-| `amp` | `true` | CUDA mixed precision |
-| `enable_lighting_normalization` | `true` | Histogram matching to identity anchor |
-| `enable_quality_metrics` | `true` | FID/KID-style proxy metrics |
-| `phase` | `full` | `full` or `inversion_only` |
+| Field                           |                                     Default | Purpose                                              |
+| ------------------------------- | ------------------------------------------: | ---------------------------------------------------- |
+| `photos_dir`                    |                       `./data/david_photos` | Raw subject photos                                   |
+| `video_dir`                     |               `./data/david_training_video` | Optional expression video directory                  |
+| `stylegan_ckpt`                 | `./pretrained/stylegan2-ffhq-1024x1024.pkl` | Pretrained StyleGAN2 checkpoint                      |
+| `output_dir`                    |                           `./model_weights` | Parent output directory                              |
+| `run_name`                      |                                  `david_v1` | Run directory name                                   |
+| `image_size`                    |                                      `1024` | Alignment/export training resolution                 |
+| `identity_anchor_count`         |                                        `40` | Best frontal neutral photos used for identity center |
+| `max_faces`                     |                                         `6` | Maximum faces to inspect per photo                   |
+| `min_landmark_visibility`       |                                       `0.5` | Occlusion rejection threshold                        |
+| `inversion_steps`               |                                       `500` | W+ optimization steps per batch                      |
+| `batch_size`                    |                                         `4` | Batched inversion size                               |
+| `pti_epochs`                    |                                       `350` | PTI training epochs                                  |
+| `grad_accum_steps`              |                                         `4` | Effective PTI batch size multiplier                  |
+| `validation_split`              |                                      `0.15` | Holdout fraction for validation LPIPS                |
+| `early_stop_patience`           |                                        `50` | PTI epochs without improvement before stopping       |
+| `amp`                           |                                      `true` | CUDA mixed precision                                 |
+| `enable_lighting_normalization` |                                      `true` | Histogram matching to identity anchor                |
+| `enable_quality_metrics`        |                                      `true` | FID/KID-style proxy metrics                          |
+| `phase`                         |                                      `full` | `full` or `inversion_only`                           |
 
 ### Output structure
 

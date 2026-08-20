@@ -5,6 +5,7 @@
 #   ./launch-glm.sh
 #   ./launch-glm.sh -p "review this change"
 #   GLM_MODEL=glm-5.2 ./launch-glm.sh --model glm-5.2
+#   GLM_MODEL=glm-5.3[1m] ./launch-glm.sh --model glm-5.3[1m]
 #   GLM_MAX_OUTPUT_TOKENS=128000 ./launch-glm.sh
 #
 # Key sources, in order:
@@ -114,11 +115,14 @@ unset Z_AI_API_KEY
 
 export ANTHROPIC_BASE_URL="${GLM_BASE_URL:-${ANTHROPIC_BASE_URL:-https://api.z.ai/api/anthropic}}"
 
-# Z.AI documents GLM 5.2 1M mode for Claude Code with the [1m] suffix.
+# Z.AI documents GLM 1M mode for Claude Code with the [1m] suffix.
 DEFAULT_GLM_MODEL="${GLM_MODEL:-glm-5.2[1m]}"
+GLM_53_MODEL="${GLM_53_MODEL:-glm-5.3[1m]}"
 SELECTED_GLM_MODEL="$(selected_model "$DEFAULT_GLM_MODEL" "$@")"
-GLM_LABEL="GLM-5.2"
-GLM_DESC="Z.AI GLM-5.2 via Anthropic API - 1M context, max effort"
+case "$SELECTED_GLM_MODEL" in
+  *5.3*) GLM_LABEL="GLM-5.3"; GLM_DESC="Z.AI GLM-5.3 via Anthropic API - 1M context, max effort" ;;
+  *)     GLM_LABEL="GLM-5.2"; GLM_DESC="Z.AI GLM-5.2 via Anthropic API - 1M context, max effort" ;;
+esac
 
 export ANTHROPIC_MODEL="$SELECTED_GLM_MODEL"
 export ANTHROPIC_DEFAULT_OPUS_MODEL="$DEFAULT_GLM_MODEL"
@@ -161,12 +165,19 @@ export CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1
 export CLAUDE_CODE_UNATTENDED_RETRY="${CLAUDE_CODE_UNATTENDED_RETRY:-1}"
 
 # Lock /model to the GLM choices in this isolated config.
-python3 - "$CLAUDE_CONFIG_DIR" "$DEFAULT_GLM_MODEL" "$ANTHROPIC_DEFAULT_HAIKU_MODEL" <<'PY' 2>/dev/null || true
+python3 - "$CLAUDE_CONFIG_DIR" "$DEFAULT_GLM_MODEL" "$ANTHROPIC_DEFAULT_HAIKU_MODEL" "$GLM_53_MODEL" <<'PY' 2>/dev/null || true
 import json, pathlib, sys
 base = pathlib.Path(sys.argv[1]); base.mkdir(parents=True, exist_ok=True)
 glm = sys.argv[2]
 haiku = sys.argv[3]
+glm53 = sys.argv[4]
 options = [
+    {
+        "value": glm53,
+        "label": "GLM-5.3 (1M context)",
+        "description": "Z.AI GLM-5.3 via Anthropic API - 1M context, max effort",
+        "descriptionForModel": "Z.AI GLM-5.3 via Anthropic API - 1M context, max effort",
+    },
     {
         "value": glm,
         "label": "GLM-5.2 (1M context)",
@@ -191,7 +202,7 @@ sj = base / "settings.json"
 try: s = json.loads(sj.read_text())
 except Exception: s = {}
 s["model"] = glm
-s["availableModels"] = [glm, haiku]
+s["availableModels"] = [glm53, glm, haiku]
 sj.write_text(json.dumps(s, indent=2))
 PY
 
