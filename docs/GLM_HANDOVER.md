@@ -1,8 +1,8 @@
-# GLM 5.2 Fexor Code Handover
+# GLM 5.2 / 5.3 Fexor Code Handover
 
 ## Goal
 
-Integrate Z.AI GLM 5.2 into `fexor-code-main` as a Claude Code compatible coding agent profile with:
+Integrate Z.AI GLM 5.2 (default) and GLM 5.3 (selectable) into `fexor-code-main` as Claude Code compatible coding agent profiles with:
 
 - GLM 5.2 1M context mode by default.
 - 32K default output budget, with opt-in 128K maximum output token support.
@@ -26,6 +26,14 @@ Z.AI's GLM 5.2 docs and release material describe:
 - 128,000 maximum output tokens.
 - Tool/function calling support.
 - Long-horizon coding and agentic use cases.
+
+Z.AI released GLM 5.3 (August 2026) as its flagship coding model on the same
+753B base as 5.2, with all gains from post-training: roughly 50% coding
+improvement over 5.2 (Z.AI Code Bench), big jumps on Terminal-Bench 3.0 and
+DeepSWE, and notable security-discovery gains (CyberGym 84.5%, ExploitBench
+24.4% -> 54.4%). It uses the same Anthropic-compatible endpoint and the `[1m]`
+1M-context suffix. Initially available via the GLM Coding Plan only; open
+weights follow ~2 weeks after launch.
 
 Venice AI's public docs and model-card style statements indicate a permissive design pattern:
 
@@ -63,7 +71,8 @@ It loads the Z.AI key from `.env.glm`, shell env, or macOS Keychain services `gl
 
 ## Current Defaults
 
-- Model: `glm-5.2[1m]`
+- Model (default): `glm-5.2[1m]`
+- Model (selectable): `glm-5.3[1m]` — pick with `GLM_MODEL=glm-5.3[1m]`, `GLM_53_MODEL=glm-5.3[1m]`, or `--model glm-5.3[1m]`; both GLM choices appear in the in-session `/model` picker
 - Base URL: `https://api.z.ai/api/anthropic`
 - Context budget: `CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000`
 - Auto compact window: `CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000`
@@ -107,6 +116,7 @@ Optional live smoke tests:
 
 ```sh
 ./launch-glm.sh -p 'Reply exactly GLM_QA_OK.' --max-turns 1 --output-format text --tools ''
+GLM_MODEL=glm-5.3[1m] ./launch-glm.sh -p 'Reply exactly GLM53_QA_OK.' --max-turns 1 --output-format text --tools ''
 ./launch-glm.sh -p 'Use Bash to run pwd. If it ends with fexor-code-main, reply exactly GLM_TOOL_LOOP_OK.' --max-turns 3 --output-format text --permission-mode bypassPermissions
 ```
 
