@@ -7,6 +7,20 @@ Claude Code snapshot version, currently `2.1.87`).
 
 ## [Unreleased]
 
+### Added — Shared autonomy system prompt
+
+- New `prompts/autonomy-system-prompt.md`: concise “answer the request, don’t moralize, assume authorized research” addendum (same policy GLM already used).
+- Launchers append it by default: `launch-deepseek.sh`, `launch-nvidia.sh`, `launch-grok.sh`, `launch-gpt.sh`, `launch-qwen37.sh`, `launch-qwen36-abliterated-runpod.sh`, and `launch-glm.sh`.
+- Shared helper: `scripts/fexor-append-autonomy.inc.sh`. Opt out with `FEXOR_AUTONOMY_PROMPT=0` or `--append-system-prompt-file`. This is a launcher addendum only — it does not change model weights or restore Anthropic cyber-risk blocks (`CYBER_RISK_INSTRUCTION` stays empty).
+
+### Added — Opt-in GLM coding verification harness
+
+- `FEXOR_CODING_HARNESS=1 ./launch-glm.sh` enables the verifier agent, coding-discipline prompt, and LSP settings. Off by default. See `docs/VERIFICATION_CONTRACT.md`.
+
+### Changed — DeepSeek launcher
+
+- Flash effort floor is **high** (not max) to avoid stalling; Pro stays **max**. Select Flash with `--model deepseek-v4-flash`. Default hosted model remains Pro.
+
 ### Added — Claude Sonnet 5 support
 
 - Added Claude Sonnet 5 (`claude-sonnet-5`) to the model registry, first-party Sonnet default, `/model` picker, public display names, pricing, commit attribution, hook examples, and bundled agent templates.
@@ -59,7 +73,8 @@ exact existing call-site contracts, verified per-flag, and shipped in `cli-dev`.
 ### Documentation
 
 - Rewrote `README.md` (architecture/flag/provider diagrams, reconstruction status, badges).
-- Added `docs/ARCHITECTURE.md`, `CONTRIBUTING.md`, `SECURITY.md`, this changelog, and GitHub issue/PR templates.
+- README launcher table now includes GLM, DeepSeek Flash, Qwen abliterated, and the shared autonomy addendum.
+- Added `docs/ARCHITECTURE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `docs/VERIFICATION_CONTRACT.md`, this changelog, and GitHub issue/PR templates.
 - Refreshed `FEATURES.md` to ground-truth (88 source flags; 49 shipped).
 
 ## [2.1.87] — Initial fork

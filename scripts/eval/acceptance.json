@@ -1,0 +1,10 @@
+{
+  "approved": false,
+  "approvedBy": "",
+  "approvedAt": "",
+  "minimumSuccessDeltaPercentagePoints": 15,
+  "maximumFalsePassRate": 0.1,
+  "maximumCostMultiplier": 2,
+  "maximumInfraFailureRate": 0.05,
+  "maximumBudgetUsdPerRun": 2
+}

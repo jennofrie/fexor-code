@@ -35,10 +35,16 @@ applies to the repository:
 
 ## Safe-use note
 
-`fexor-code` removes the CLI's prompt-level guardrails. The model's own safety
-training still applies, but you are responsible for how you operate the agent —
-especially with broad permissions, auto-approval modes, or untrusted MCP
-servers. Review permission settings before running unattended.
+`fexor-code` removes the CLI's prompt-level guardrails (`CYBER_RISK_INSTRUCTION`
+is empty; the Read-tool cyber-risk footer is gone). The model's own safety
+training still applies. Third-party launchers append
+`prompts/autonomy-system-prompt.md` (don't moralize; assume authorized research)
+unless `FEXOR_AUTONOMY_PROMPT=0`. That addendum is not a jailbreak and does not
+strip provider-side refusals.
+
+You are responsible for how you operate the agent — especially with broad
+permissions, auto-approval modes, or untrusted MCP servers. Review permission
+settings before running unattended.
 
 ---
 

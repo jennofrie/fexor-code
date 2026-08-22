@@ -14,27 +14,27 @@ import type {
   SandboxDependencyCheck,
   SandboxRuntimeConfig,
   SandboxViolationEvent,
-} from '@anthropic-ai/sandbox-runtime'
+} from "@anthropic-ai/sandbox-runtime";
 import {
   SandboxManager as BaseSandboxManager,
   SandboxRuntimeConfigSchema,
   SandboxViolationStore,
-} from '@anthropic-ai/sandbox-runtime'
-import { rmSync, statSync } from 'fs'
-import { readFile } from 'fs/promises'
-import { memoize } from 'lodash-es'
-import { join, resolve, sep } from 'path'
+} from "@anthropic-ai/sandbox-runtime";
+import { rmSync, statSync } from "fs";
+import { readFile } from "fs/promises";
+import { memoize } from "lodash-es";
+import { join, resolve, sep } from "path";
 import {
   getAdditionalDirectoriesForClaudeMd,
   getCwdState,
   getOriginalCwd,
-} from '../../bootstrap/state.js'
-import { logForDebugging } from '../debug.js'
-import { expandPath } from '../path.js'
-import { getPlatform, type Platform } from '../platform.js'
-import { settingsChangeDetector } from '../settings/changeDetector.js'
-import { SETTING_SOURCES, type SettingSource } from '../settings/constants.js'
-import { getManagedSettingsDropInDir } from '../settings/managedPath.js'
+} from "../../bootstrap/state.js";
+import { logForDebugging } from "../debug.js";
+import { expandPath } from "../path.js";
+import { getPlatform, type Platform } from "../platform.js";
+import { settingsChangeDetector } from "../settings/changeDetector.js";
+import { SETTING_SOURCES, type SettingSource } from "../settings/constants.js";
+import { getManagedSettingsDropInDir } from "../settings/managedPath.js";
 import {
   getInitialSettings,
   getSettings_DEPRECATED,
@@ -42,42 +42,42 @@ import {
   getSettingsForSource,
   getSettingsRootPathForSource,
   updateSettingsForSource,
-} from '../settings/settings.js'
-import type { SettingsJson } from '../settings/types.js'
+} from "../settings/settings.js";
+import type { SettingsJson } from "../settings/types.js";
 
 // ============================================================================
 // Settings Converter
 // ============================================================================
 
-import { BASH_TOOL_NAME } from 'src/tools/BashTool/toolName.js'
-import { FILE_EDIT_TOOL_NAME } from 'src/tools/FileEditTool/constants.js'
-import { FILE_READ_TOOL_NAME } from 'src/tools/FileReadTool/prompt.js'
-import { WEB_FETCH_TOOL_NAME } from 'src/tools/WebFetchTool/prompt.js'
-import { errorMessage } from '../errors.js'
-import { getClaudeTempDir } from '../permissions/filesystem.js'
-import type { PermissionRuleValue } from '../permissions/PermissionRule.js'
-import { ripgrepCommand } from '../ripgrep.js'
+import { BASH_TOOL_NAME } from "src/tools/BashTool/toolName.js";
+import { FILE_EDIT_TOOL_NAME } from "src/tools/FileEditTool/constants.js";
+import { FILE_READ_TOOL_NAME } from "src/tools/FileReadTool/prompt.js";
+import { WEB_FETCH_TOOL_NAME } from "src/tools/WebFetchTool/prompt.js";
+import { errorMessage } from "../errors.js";
+import { getClaudeTempDir } from "../permissions/filesystem.js";
+import type { PermissionRuleValue } from "../permissions/PermissionRule.js";
+import { ripgrepCommand } from "../ripgrep.js";
 
 // Local copies to avoid circular dependency
 // (permissions.ts imports SandboxManager, bashPermissions.ts imports permissions.ts)
 function permissionRuleValueFromString(
-  ruleString: string,
+  ruleString: string
 ): PermissionRuleValue {
-  const matches = ruleString.match(/^([^(]+)\(([^)]+)\)$/)
+  const matches = ruleString.match(/^([^(]+)\(([^)]+)\)$/);
   if (!matches) {
-    return { toolName: ruleString }
+    return { toolName: ruleString };
   }
-  const toolName = matches[1]
-  const ruleContent = matches[2]
+  const toolName = matches[1];
+  const ruleContent = matches[2];
   if (!toolName || !ruleContent) {
-    return { toolName: ruleString }
+    return { toolName: ruleString };
   }
-  return { toolName, ruleContent }
+  return { toolName, ruleContent };
 }
 
 function permissionRuleExtractPrefix(permissionRule: string): string | null {
-  const match = permissionRule.match(/^(.+):\*$/)
-  return match?.[1] ?? null
+  const match = permissionRule.match(/^(.+):\*$/);
+  return match?.[1] ?? null;
 }
 
 /**
@@ -98,24 +98,24 @@ function permissionRuleExtractPrefix(permissionRule: string): string | null {
  */
 export function resolvePathPatternForSandbox(
   pattern: string,
-  source: SettingSource,
+  source: SettingSource
 ): string {
   // Handle // prefix - absolute from root (CC-specific convention)
-  if (pattern.startsWith('//')) {
-    return pattern.slice(1) // "//.aws/**" → "/.aws/**"
+  if (pattern.startsWith("//")) {
+    return pattern.slice(1); // "//.aws/**" → "/.aws/**"
   }
 
   // Handle / prefix - relative to settings file directory (CC-specific convention)
   // Note: ~/path and relative paths are passed through for sandbox-runtime to handle
-  if (pattern.startsWith('/') && !pattern.startsWith('//')) {
-    const root = getSettingsRootPathForSource(source)
+  if (pattern.startsWith("/") && !pattern.startsWith("//")) {
+    const root = getSettingsRootPathForSource(source);
     // Pattern like "/foo/**" becomes "${root}/foo/**"
-    return resolve(root, pattern.slice(1))
+    return resolve(root, pattern.slice(1));
   }
 
   // Other patterns (~/path, ./path, path) pass through as-is
   // sandbox-runtime's normalizePathForSandbox will handle them
-  return pattern
+  return pattern;
 }
 
 /**
@@ -137,12 +137,12 @@ export function resolvePathPatternForSandbox(
  */
 export function resolveSandboxFilesystemPath(
   pattern: string,
-  source: SettingSource,
+  source: SettingSource
 ): string {
   // Legacy permission-rule escape: //path → /path. Kept for compat with
   // users who worked around #30067 by writing //Users/foo/.cargo in config.
-  if (pattern.startsWith('//')) return pattern.slice(1)
-  return expandPath(pattern, getSettingsRootPathForSource(source))
+  if (pattern.startsWith("//")) return pattern.slice(1);
+  return expandPath(pattern, getSettingsRootPathForSource(source));
 }
 
 /**
@@ -151,16 +151,16 @@ export function resolveSandboxFilesystemPath(
  */
 export function shouldAllowManagedSandboxDomainsOnly(): boolean {
   return (
-    getSettingsForSource('policySettings')?.sandbox?.network
+    getSettingsForSource("policySettings")?.sandbox?.network
       ?.allowManagedDomainsOnly === true
-  )
+  );
 }
 
 function shouldAllowManagedReadPathsOnly(): boolean {
   return (
-    getSettingsForSource('policySettings')?.sandbox?.filesystem
+    getSettingsForSource("policySettings")?.sandbox?.filesystem
       ?.allowManagedReadPathsOnly === true
-  )
+  );
 }
 
 /**
@@ -170,78 +170,78 @@ function shouldAllowManagedReadPathsOnly(): boolean {
  * @param settings Merged settings (used for sandbox config like network, ripgrep, etc.)
  */
 export function convertToSandboxRuntimeConfig(
-  settings: SettingsJson,
+  settings: SettingsJson
 ): SandboxRuntimeConfig {
-  const permissions = settings.permissions || {}
+  const permissions = settings.permissions || {};
 
   // Extract network domains from WebFetch rules
-  const allowedDomains: string[] = []
-  const deniedDomains: string[] = []
+  const allowedDomains: string[] = [];
+  const deniedDomains: string[] = [];
 
   // When allowManagedSandboxDomainsOnly is enabled, only use domains from policy settings
   if (shouldAllowManagedSandboxDomainsOnly()) {
-    const policySettings = getSettingsForSource('policySettings')
+    const policySettings = getSettingsForSource("policySettings");
     for (const domain of policySettings?.sandbox?.network?.allowedDomains ||
       []) {
-      allowedDomains.push(domain)
+      allowedDomains.push(domain);
     }
     for (const ruleString of policySettings?.permissions?.allow || []) {
-      const rule = permissionRuleValueFromString(ruleString)
+      const rule = permissionRuleValueFromString(ruleString);
       if (
         rule.toolName === WEB_FETCH_TOOL_NAME &&
-        rule.ruleContent?.startsWith('domain:')
+        rule.ruleContent?.startsWith("domain:")
       ) {
-        allowedDomains.push(rule.ruleContent.substring('domain:'.length))
+        allowedDomains.push(rule.ruleContent.substring("domain:".length));
       }
     }
   } else {
     for (const domain of settings.sandbox?.network?.allowedDomains || []) {
-      allowedDomains.push(domain)
+      allowedDomains.push(domain);
     }
     for (const ruleString of permissions.allow || []) {
-      const rule = permissionRuleValueFromString(ruleString)
+      const rule = permissionRuleValueFromString(ruleString);
       if (
         rule.toolName === WEB_FETCH_TOOL_NAME &&
-        rule.ruleContent?.startsWith('domain:')
+        rule.ruleContent?.startsWith("domain:")
       ) {
-        allowedDomains.push(rule.ruleContent.substring('domain:'.length))
+        allowedDomains.push(rule.ruleContent.substring("domain:".length));
       }
     }
   }
 
   for (const ruleString of permissions.deny || []) {
-    const rule = permissionRuleValueFromString(ruleString)
+    const rule = permissionRuleValueFromString(ruleString);
     if (
       rule.toolName === WEB_FETCH_TOOL_NAME &&
-      rule.ruleContent?.startsWith('domain:')
+      rule.ruleContent?.startsWith("domain:")
     ) {
-      deniedDomains.push(rule.ruleContent.substring('domain:'.length))
+      deniedDomains.push(rule.ruleContent.substring("domain:".length));
     }
   }
 
   // Extract filesystem paths from Edit and Read rules
   // Always include current directory and Claude temp directory as writable
   // The temp directory is needed for Shell.ts cwd tracking files
-  const allowWrite: string[] = ['.', getClaudeTempDir()]
-  const denyWrite: string[] = []
-  const denyRead: string[] = []
-  const allowRead: string[] = []
+  const allowWrite: string[] = [".", getClaudeTempDir()];
+  const denyWrite: string[] = [];
+  const denyRead: string[] = [];
+  const allowRead: string[] = [];
 
   // Always deny writes to settings.json files to prevent sandbox escape
   // This blocks settings in the original working directory (where Claude Code started)
-  const settingsPaths = SETTING_SOURCES.map(source =>
-    getSettingsFilePathForSource(source),
-  ).filter((p): p is string => p !== undefined)
-  denyWrite.push(...settingsPaths)
-  denyWrite.push(getManagedSettingsDropInDir())
+  const settingsPaths = SETTING_SOURCES.map((source) =>
+    getSettingsFilePathForSource(source)
+  ).filter((p): p is string => p !== undefined);
+  denyWrite.push(...settingsPaths);
+  denyWrite.push(getManagedSettingsDropInDir());
 
   // Also block settings files in the current working directory if it differs from original
   // This handles the case where the user has cd'd to a different directory
-  const cwd = getCwdState()
-  const originalCwd = getOriginalCwd()
+  const cwd = getCwdState();
+  const originalCwd = getOriginalCwd();
   if (cwd !== originalCwd) {
-    denyWrite.push(resolve(cwd, '.claude', 'settings.json'))
-    denyWrite.push(resolve(cwd, '.claude', 'settings.local.json'))
+    denyWrite.push(resolve(cwd, ".claude", "settings.json"));
+    denyWrite.push(resolve(cwd, ".claude", "settings.local.json"));
   }
 
   // Block writes to .claude/skills in both original and current working directories.
@@ -249,9 +249,9 @@ export function convertToSandboxRuntimeConfig(
   // .claude/agents but not .claude/skills. Skills have the same privilege level
   // (auto-discovered, auto-loaded, full Claude capabilities) so they need the
   // same OS-level sandbox protection.
-  denyWrite.push(resolve(originalCwd, '.claude', 'skills'))
+  denyWrite.push(resolve(originalCwd, ".claude", "skills"));
   if (cwd !== originalCwd) {
-    denyWrite.push(resolve(cwd, '.claude', 'skills'))
+    denyWrite.push(resolve(cwd, ".claude", "skills"));
   }
 
   // SECURITY: Git's is_git_directory() treats cwd as a bare repo if it has
@@ -264,17 +264,17 @@ export function convertToSandboxRuntimeConfig(
   // So: if a file exists, denyWrite (ro-bind in place, no stub). If not, scrub
   // it post-command in scrubBareGitRepoFiles() — planted files are gone before
   // unsandboxed git runs; inside the command, git is itself sandboxed.
-  bareGitRepoScrubPaths.length = 0
-  const bareGitRepoFiles = ['HEAD', 'objects', 'refs', 'hooks', 'config']
+  bareGitRepoScrubPaths.length = 0;
+  const bareGitRepoFiles = ["HEAD", "objects", "refs", "hooks", "config"];
   for (const dir of cwd === originalCwd ? [originalCwd] : [originalCwd, cwd]) {
     for (const gitFile of bareGitRepoFiles) {
-      const p = resolve(dir, gitFile)
+      const p = resolve(dir, gitFile);
       try {
         // eslint-disable-next-line custom-rules/no-sync-fs -- refreshConfig() must be sync
-        statSync(p)
-        denyWrite.push(p)
+        statSync(p);
+        denyWrite.push(p);
       } catch {
-        bareGitRepoScrubPaths.push(p)
+        bareGitRepoScrubPaths.push(p);
       }
     }
   }
@@ -284,7 +284,7 @@ export function convertToSandboxRuntimeConfig(
   // access to the main repo's .git directory for index.lock etc.
   // This is resolved once at init time (worktree status doesn't change mid-session).
   if (worktreeMainRepoPath && worktreeMainRepoPath !== cwd) {
-    allowWrite.push(worktreeMainRepoPath)
+    allowWrite.push(worktreeMainRepoPath);
   }
 
   // Include directories added via --add-dir CLI flag or /add-dir command.
@@ -295,33 +295,35 @@ export function convertToSandboxRuntimeConfig(
   const additionalDirs = new Set([
     ...(settings.permissions?.additionalDirectories || []),
     ...getAdditionalDirectoriesForClaudeMd(),
-  ])
-  allowWrite.push(...additionalDirs)
+  ]);
+  allowWrite.push(...additionalDirs);
 
   // Iterate through each settings source to resolve paths correctly
   // Path patterns like `/foo` are relative to the settings file directory,
   // so we need to know which source each rule came from
   for (const source of SETTING_SOURCES) {
-    const sourceSettings = getSettingsForSource(source)
+    const sourceSettings = getSettingsForSource(source);
 
     // Extract filesystem paths from permission rules
     if (sourceSettings?.permissions) {
       for (const ruleString of sourceSettings.permissions.allow || []) {
-        const rule = permissionRuleValueFromString(ruleString)
+        const rule = permissionRuleValueFromString(ruleString);
         if (rule.toolName === FILE_EDIT_TOOL_NAME && rule.ruleContent) {
           allowWrite.push(
-            resolvePathPatternForSandbox(rule.ruleContent, source),
-          )
+            resolvePathPatternForSandbox(rule.ruleContent, source)
+          );
         }
       }
 
       for (const ruleString of sourceSettings.permissions.deny || []) {
-        const rule = permissionRuleValueFromString(ruleString)
+        const rule = permissionRuleValueFromString(ruleString);
         if (rule.toolName === FILE_EDIT_TOOL_NAME && rule.ruleContent) {
-          denyWrite.push(resolvePathPatternForSandbox(rule.ruleContent, source))
+          denyWrite.push(
+            resolvePathPatternForSandbox(rule.ruleContent, source)
+          );
         }
         if (rule.toolName === FILE_READ_TOOL_NAME && rule.ruleContent) {
-          denyRead.push(resolvePathPatternForSandbox(rule.ruleContent, source))
+          denyRead.push(resolvePathPatternForSandbox(rule.ruleContent, source));
         }
       }
     }
@@ -329,32 +331,32 @@ export function convertToSandboxRuntimeConfig(
     // Extract filesystem paths from sandbox.filesystem settings
     // sandbox.filesystem.* uses standard path semantics (/path = absolute),
     // NOT the permission-rule convention (/path = settings-relative). #30067
-    const fs = sourceSettings?.sandbox?.filesystem
+    const fs = sourceSettings?.sandbox?.filesystem;
     if (fs) {
       for (const p of fs.allowWrite || []) {
-        allowWrite.push(resolveSandboxFilesystemPath(p, source))
+        allowWrite.push(resolveSandboxFilesystemPath(p, source));
       }
       for (const p of fs.denyWrite || []) {
-        denyWrite.push(resolveSandboxFilesystemPath(p, source))
+        denyWrite.push(resolveSandboxFilesystemPath(p, source));
       }
       for (const p of fs.denyRead || []) {
-        denyRead.push(resolveSandboxFilesystemPath(p, source))
+        denyRead.push(resolveSandboxFilesystemPath(p, source));
       }
-      if (!shouldAllowManagedReadPathsOnly() || source === 'policySettings') {
+      if (!shouldAllowManagedReadPathsOnly() || source === "policySettings") {
         for (const p of fs.allowRead || []) {
-          allowRead.push(resolveSandboxFilesystemPath(p, source))
+          allowRead.push(resolveSandboxFilesystemPath(p, source));
         }
       }
     }
   }
   // Ripgrep config for sandbox. User settings take priority; otherwise pass our rg.
   // In embedded mode (argv0='rg' dispatch), sandbox-runtime spawns with argv0 set.
-  const { rgPath, rgArgs, argv0 } = ripgrepCommand()
+  const { rgPath, rgArgs, argv0 } = ripgrepCommand();
   const ripgrepConfig = settings.sandbox?.ripgrep ?? {
     command: rgPath,
     args: rgArgs,
     argv0,
-  }
+  };
 
   return {
     network: {
@@ -377,24 +379,29 @@ export function convertToSandboxRuntimeConfig(
     enableWeakerNetworkIsolation:
       settings.sandbox?.enableWeakerNetworkIsolation,
     ripgrep: ripgrepConfig,
-  }
+  };
 }
 
 // ============================================================================
 // Claude CLI-specific state
 // ============================================================================
 
-let initializationPromise: Promise<void> | undefined
-let settingsSubscriptionCleanup: (() => void) | undefined
+let initializationPromise: Promise<void> | undefined;
+let settingsSubscriptionCleanup: (() => void) | undefined;
+let customConfigLeaseCount = 0;
+let leasedConfigSignature: string | undefined;
+let configBeforeCustomLease: SandboxRuntimeConfig | undefined;
+let deferredSettingsConfig: SandboxRuntimeConfig | undefined;
+let configuredSandboxAskCallback: SandboxAskCallback | undefined;
 
 // Cached main repo path for git worktrees, resolved once during initialize().
 // In a worktree, .git is a file containing "gitdir: /path/to/main/repo/.git/worktrees/name".
 // undefined = not yet resolved; null = not a worktree or detection failed.
-let worktreeMainRepoPath: string | null | undefined
+let worktreeMainRepoPath: string | null | undefined;
 
 // Bare-repo files at cwd that didn't exist at config time and should be
 // scrubbed if they appear after a sandboxed command. See anthropics/claude-code#29316.
-const bareGitRepoScrubPaths: string[] = []
+const bareGitRepoScrubPaths: string[] = [];
 
 /**
  * Delete bare-repo files planted at cwd during a sandboxed command, before
@@ -405,8 +412,8 @@ function scrubBareGitRepoFiles(): void {
   for (const p of bareGitRepoScrubPaths) {
     try {
       // eslint-disable-next-line custom-rules/no-sync-fs -- cleanupAfterCommand must be sync (Shell.ts:367)
-      rmSync(p, { recursive: true })
-      logForDebugging(`[Sandbox] scrubbed planted bare-repo file: ${p}`)
+      rmSync(p, { recursive: true });
+      logForDebugging(`[Sandbox] scrubbed planted bare-repo file: ${p}`);
     } catch {
       // ENOENT is the expected common case — nothing was planted
     }
@@ -420,27 +427,27 @@ function scrubBareGitRepoFiles(): void {
  * If .git is a directory, readFile throws EISDIR and we return null.
  */
 async function detectWorktreeMainRepoPath(cwd: string): Promise<string | null> {
-  const gitPath = join(cwd, '.git')
+  const gitPath = join(cwd, ".git");
   try {
-    const gitContent = await readFile(gitPath, { encoding: 'utf8' })
-    const gitdirMatch = gitContent.match(/^gitdir:\s*(.+)$/m)
+    const gitContent = await readFile(gitPath, { encoding: "utf8" });
+    const gitdirMatch = gitContent.match(/^gitdir:\s*(.+)$/m);
     if (!gitdirMatch?.[1]) {
-      return null
+      return null;
     }
     // gitdir may be relative (rare, but git accepts it) — resolve against cwd
-    const gitdir = resolve(cwd, gitdirMatch[1].trim())
+    const gitdir = resolve(cwd, gitdirMatch[1].trim());
     // gitdir format: /path/to/main/repo/.git/worktrees/worktree-name
     // Match the /.git/worktrees/ segment specifically — indexOf('.git') alone
     // would false-match paths like /home/user/.github-projects/...
-    const marker = `${sep}.git${sep}worktrees${sep}`
-    const markerIndex = gitdir.lastIndexOf(marker)
+    const marker = `${sep}.git${sep}worktrees${sep}`;
+    const markerIndex = gitdir.lastIndexOf(marker);
     if (markerIndex > 0) {
-      return gitdir.substring(0, markerIndex)
+      return gitdir.substring(0, markerIndex);
     }
-    return null
+    return null;
   } catch {
     // Not in a worktree, .git is a directory (EISDIR), or can't read .git file
-    return null
+    return null;
   }
 }
 
@@ -449,39 +456,39 @@ async function detectWorktreeMainRepoPath(cwd: string): Promise<string | null> {
  * Returns { errors, warnings } - errors mean sandbox cannot run
  */
 const checkDependencies = memoize((): SandboxDependencyCheck => {
-  const { rgPath, rgArgs } = ripgrepCommand()
+  const { rgPath, rgArgs } = ripgrepCommand();
   return BaseSandboxManager.checkDependencies({
     command: rgPath,
     args: rgArgs,
-  })
-})
+  });
+});
 
 function getSandboxEnabledSetting(): boolean {
   try {
-    const settings = getSettings_DEPRECATED()
-    return settings?.sandbox?.enabled ?? false
+    const settings = getSettings_DEPRECATED();
+    return settings?.sandbox?.enabled ?? false;
   } catch (error) {
-    logForDebugging(`Failed to get settings for sandbox check: ${error}`)
-    return false
+    logForDebugging(`Failed to get settings for sandbox check: ${error}`);
+    return false;
   }
 }
 
 function isAutoAllowBashIfSandboxedEnabled(): boolean {
-  const settings = getSettings_DEPRECATED()
-  return settings?.sandbox?.autoAllowBashIfSandboxed ?? true
+  const settings = getSettings_DEPRECATED();
+  return settings?.sandbox?.autoAllowBashIfSandboxed ?? true;
 }
 
 function areUnsandboxedCommandsAllowed(): boolean {
-  const settings = getSettings_DEPRECATED()
-  return settings?.sandbox?.allowUnsandboxedCommands ?? true
+  const settings = getSettings_DEPRECATED();
+  return settings?.sandbox?.allowUnsandboxedCommands ?? true;
 }
 
 function isSandboxRequired(): boolean {
-  const settings = getSettings_DEPRECATED()
+  const settings = getSettings_DEPRECATED();
   return (
     getSandboxEnabledSetting() &&
     (settings?.sandbox?.failIfUnavailable ?? false)
-  )
+  );
 }
 
 /**
@@ -489,8 +496,8 @@ function isSandboxRequired(): boolean {
  * Supports: macOS, Linux, and WSL2+ (WSL1 is not supported)
  */
 const isSupportedPlatform = memoize((): boolean => {
-  return BaseSandboxManager.isSupportedPlatform()
-})
+  return BaseSandboxManager.isSupportedPlatform();
+});
 
 /**
  * Check if the current platform is in the enabledPlatforms list.
@@ -504,24 +511,24 @@ const isSupportedPlatform = memoize((): boolean => {
  */
 function isPlatformInEnabledList(): boolean {
   try {
-    const settings = getInitialSettings()
+    const settings = getInitialSettings();
     const enabledPlatforms = (
       settings?.sandbox as { enabledPlatforms?: Platform[] } | undefined
-    )?.enabledPlatforms
+    )?.enabledPlatforms;
 
     if (enabledPlatforms === undefined) {
-      return true
+      return true;
     }
 
     if (enabledPlatforms.length === 0) {
-      return false
+      return false;
     }
 
-    const currentPlatform = getPlatform()
-    return enabledPlatforms.includes(currentPlatform)
+    const currentPlatform = getPlatform();
+    return enabledPlatforms.includes(currentPlatform);
   } catch (error) {
-    logForDebugging(`Failed to check enabledPlatforms: ${error}`)
-    return true // Default to enabled if we can't read settings
+    logForDebugging(`Failed to check enabledPlatforms: ${error}`);
+    return true; // Default to enabled if we can't read settings
   }
 }
 
@@ -531,19 +538,19 @@ function isPlatformInEnabledList(): boolean {
  */
 function isSandboxingEnabled(): boolean {
   if (!isSupportedPlatform()) {
-    return false
+    return false;
   }
 
   if (checkDependencies().errors.length > 0) {
-    return false
+    return false;
   }
 
   // Check if current platform is in the enabledPlatforms list (undocumented setting)
   if (!isPlatformInEnabledList()) {
-    return false
+    return false;
   }
 
-  return getSandboxEnabledSetting()
+  return getSandboxEnabledSetting();
 }
 
 /**
@@ -563,32 +570,32 @@ function getSandboxUnavailableReason(): string | undefined {
   // Only warn if user explicitly asked for sandbox. If they didn't enable
   // it, missing deps are irrelevant.
   if (!getSandboxEnabledSetting()) {
-    return undefined
+    return undefined;
   }
 
   if (!isSupportedPlatform()) {
-    const platform = getPlatform()
-    if (platform === 'wsl') {
-      return 'sandbox.enabled is set but WSL1 is not supported (requires WSL2)'
+    const platform = getPlatform();
+    if (platform === "wsl") {
+      return "sandbox.enabled is set but WSL1 is not supported (requires WSL2)";
     }
-    return `sandbox.enabled is set but ${platform} is not supported (requires macOS, Linux, or WSL2)`
+    return `sandbox.enabled is set but ${platform} is not supported (requires macOS, Linux, or WSL2)`;
   }
 
   if (!isPlatformInEnabledList()) {
-    return `sandbox.enabled is set but ${getPlatform()} is not in sandbox.enabledPlatforms`
+    return `sandbox.enabled is set but ${getPlatform()} is not in sandbox.enabledPlatforms`;
   }
 
-  const deps = checkDependencies()
+  const deps = checkDependencies();
   if (deps.errors.length > 0) {
-    const platform = getPlatform()
+    const platform = getPlatform();
     const hint =
-      platform === 'macos'
-        ? 'run /sandbox or /doctor for details'
-        : 'install missing tools (e.g. apt install bubblewrap socat) or run /sandbox for details'
-    return `sandbox.enabled is set but dependencies are missing: ${deps.errors.join(', ')} · ${hint}`
+      platform === "macos"
+        ? "run /sandbox or /doctor for details"
+        : "install missing tools (e.g. apt install bubblewrap socat) or run /sandbox for details";
+    return `sandbox.enabled is set but dependencies are missing: ${deps.errors.join(", ")} · ${hint}`;
   }
 
-  return undefined
+  return undefined;
 }
 
 /**
@@ -596,48 +603,48 @@ function getSandboxUnavailableReason(): string | undefined {
  */
 function getLinuxGlobPatternWarnings(): string[] {
   // Only return warnings on Linux/WSL (bubblewrap doesn't support globs)
-  const platform = getPlatform()
-  if (platform !== 'linux' && platform !== 'wsl') {
-    return []
+  const platform = getPlatform();
+  if (platform !== "linux" && platform !== "wsl") {
+    return [];
   }
 
   try {
-    const settings = getSettings_DEPRECATED()
+    const settings = getSettings_DEPRECATED();
 
     // Only return warnings when sandboxing is enabled (check settings directly, not cached value)
     if (!settings?.sandbox?.enabled) {
-      return []
+      return [];
     }
 
-    const permissions = settings?.permissions || {}
-    const warnings: string[] = []
+    const permissions = settings?.permissions || {};
+    const warnings: string[] = [];
 
     // Helper to check if a path has glob characters (excluding trailing /**)
     const hasGlobs = (path: string): boolean => {
-      const stripped = path.replace(/\/\*\*$/, '')
-      return /[*?[\]]/.test(stripped)
-    }
+      const stripped = path.replace(/\/\*\*$/, "");
+      return /[*?[\]]/.test(stripped);
+    };
 
     // Check all permission rules
     for (const ruleString of [
       ...(permissions.allow || []),
       ...(permissions.deny || []),
     ]) {
-      const rule = permissionRuleValueFromString(ruleString)
+      const rule = permissionRuleValueFromString(ruleString);
       if (
         (rule.toolName === FILE_EDIT_TOOL_NAME ||
           rule.toolName === FILE_READ_TOOL_NAME) &&
         rule.ruleContent &&
         hasGlobs(rule.ruleContent)
       ) {
-        warnings.push(ruleString)
+        warnings.push(ruleString);
       }
     }
 
-    return warnings
+    return warnings;
   } catch (error) {
-    logForDebugging(`Failed to get Linux glob pattern warnings: ${error}`)
-    return []
+    logForDebugging(`Failed to get Linux glob pattern warnings: ${error}`);
+    return [];
   }
 }
 
@@ -647,36 +654,36 @@ function getLinuxGlobPatternWarnings(): string[] {
 function areSandboxSettingsLockedByPolicy(): boolean {
   // Check if sandbox settings are explicitly set in any source that overrides localSettings
   // These sources have higher priority than localSettings and would make local changes ineffective
-  const overridingSources = ['flagSettings', 'policySettings'] as const
+  const overridingSources = ["flagSettings", "policySettings"] as const;
 
   for (const source of overridingSources) {
-    const settings = getSettingsForSource(source)
+    const settings = getSettingsForSource(source);
     if (
       settings?.sandbox?.enabled !== undefined ||
       settings?.sandbox?.autoAllowBashIfSandboxed !== undefined ||
       settings?.sandbox?.allowUnsandboxedCommands !== undefined
     ) {
-      return true
+      return true;
     }
   }
 
-  return false
+  return false;
 }
 
 /**
  * Set sandbox settings
  */
 async function setSandboxSettings(options: {
-  enabled?: boolean
-  autoAllowBashIfSandboxed?: boolean
-  allowUnsandboxedCommands?: boolean
+  enabled?: boolean;
+  autoAllowBashIfSandboxed?: boolean;
+  allowUnsandboxedCommands?: boolean;
 }): Promise<void> {
-  const existingSettings = getSettingsForSource('localSettings')
+  const existingSettings = getSettingsForSource("localSettings");
 
   // Note: Memoized caches auto-invalidate when settings change because they use
   // the settings object as the cache key (new settings object = cache miss)
 
-  updateSettingsForSource('localSettings', {
+  updateSettingsForSource("localSettings", {
     sandbox: {
       ...existingSettings?.sandbox,
       ...(options.enabled !== undefined && { enabled: options.enabled }),
@@ -687,15 +694,15 @@ async function setSandboxSettings(options: {
         allowUnsandboxedCommands: options.allowUnsandboxedCommands,
       }),
     },
-  })
+  });
 }
 
 /**
  * Get excluded commands (commands that should not be sandboxed)
  */
 function getExcludedCommands(): string[] {
-  const settings = getSettings_DEPRECATED()
-  return settings?.sandbox?.excludedCommands ?? []
+  const settings = getSettings_DEPRECATED();
+  return settings?.sandbox?.excludedCommands ?? [];
 }
 
 /**
@@ -705,14 +712,17 @@ async function wrapWithSandbox(
   command: string,
   binShell?: string,
   customConfig?: Partial<SandboxRuntimeConfig>,
-  abortSignal?: AbortSignal,
+  abortSignal?: AbortSignal
 ): Promise<string> {
+  if (customConfig) {
+    await ensureInitializedForCustomConfig(customConfig);
+  }
   // If sandboxing is enabled, ensure initialization is complete
-  if (isSandboxingEnabled()) {
+  else if (isSandboxingEnabled()) {
     if (initializationPromise) {
-      await initializationPromise
+      await initializationPromise;
     } else {
-      throw new Error('Sandbox failed to initialize. ')
+      throw new Error("Sandbox failed to initialize. ");
     }
   }
 
@@ -720,39 +730,167 @@ async function wrapWithSandbox(
     command,
     binShell,
     customConfig,
-    abortSignal,
-  )
+    abortSignal
+  );
+}
+
+function mergeSandboxRuntimeConfig(
+  baseConfig: SandboxRuntimeConfig,
+  customConfig?: Partial<SandboxRuntimeConfig>
+): SandboxRuntimeConfig {
+  return SandboxRuntimeConfigSchema.parse({
+    ...baseConfig,
+    ...customConfig,
+    filesystem: {
+      ...baseConfig.filesystem,
+      ...customConfig?.filesystem,
+    },
+    network: {
+      ...baseConfig.network,
+      ...customConfig?.network,
+    },
+  });
+}
+
+function applySettingsSandboxConfig(config: SandboxRuntimeConfig): void {
+  if (customConfigLeaseCount > 0) {
+    deferredSettingsConfig = config;
+    return;
+  }
+  BaseSandboxManager.updateConfig(config);
+}
+
+function ensureSettingsSubscription(): void {
+  if (settingsSubscriptionCleanup) return;
+  settingsSubscriptionCleanup = settingsChangeDetector.subscribe(() => {
+    const settings = getSettings_DEPRECATED();
+    applySettingsSandboxConfig(convertToSandboxRuntimeConfig(settings));
+    logForDebugging("Sandbox configuration updated from settings change");
+  });
+}
+
+function wrapSandboxAskCallback(
+  sandboxAskCallback: SandboxAskCallback | undefined
+): SandboxAskCallback | undefined {
+  return sandboxAskCallback
+    ? async (hostPattern: NetworkHostPattern) => {
+        if (customConfigLeaseCount > 0) return false;
+        if (shouldAllowManagedSandboxDomainsOnly()) {
+          logForDebugging(
+            `[sandbox] Blocked network request to ${hostPattern.host} (allowManagedDomainsOnly)`
+          );
+          return false;
+        }
+        return sandboxAskCallback(hostPattern);
+      }
+    : undefined;
+}
+
+/**
+ * Hold the runtime-wide network policy for the lifetime of a protected Bash
+ * subprocess. sandbox-runtime accepts per-command filesystem paths, but its
+ * proxy allowlist and local-binding policy are process-global.
+ */
+async function acquireCustomConfig(
+  customConfig: Partial<SandboxRuntimeConfig>
+): Promise<() => void> {
+  await ensureInitializedForCustomConfig(customConfig);
+  const current = BaseSandboxManager.getConfig();
+  if (!current)
+    throw new Error("Sandbox runtime configuration is unavailable.");
+  const merged = mergeSandboxRuntimeConfig(current, customConfig);
+  const signature = JSON.stringify(merged);
+  if (customConfigLeaseCount > 0 && signature !== leasedConfigSignature) {
+    throw new Error("A different protected sandbox policy is already active.");
+  }
+  if (customConfigLeaseCount === 0) {
+    configBeforeCustomLease = structuredClone(current);
+    leasedConfigSignature = signature;
+    BaseSandboxManager.updateConfig(merged);
+  }
+  customConfigLeaseCount += 1;
+
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    customConfigLeaseCount = Math.max(0, customConfigLeaseCount - 1);
+    if (customConfigLeaseCount !== 0) return;
+    const restore = deferredSettingsConfig ?? configBeforeCustomLease;
+    if (restore) BaseSandboxManager.updateConfig(restore);
+    leasedConfigSignature = undefined;
+    configBeforeCustomLease = undefined;
+    deferredSettingsConfig = undefined;
+  };
+}
+
+/**
+ * Initialize the runtime for a harness-owned custom policy even when the user
+ * has not enabled the general-purpose Bash sandbox. Normal commands still use
+ * isSandboxingEnabled(), so this does not opt the rest of the session in.
+ */
+async function ensureInitializedForCustomConfig(
+  _customConfig?: Partial<SandboxRuntimeConfig>
+): Promise<void> {
+  if (!isSupportedPlatform()) {
+    throw new Error("Sandbox runtime is unsupported on this platform.");
+  }
+  const dependencyErrors = checkDependencies().errors;
+  if (dependencyErrors.length > 0) {
+    throw new Error(
+      `Sandbox runtime dependencies are unavailable: ${dependencyErrors.join("; ")}`
+    );
+  }
+  if (!initializationPromise) {
+    initializationPromise = (async () => {
+      try {
+        if (worktreeMainRepoPath === undefined) {
+          worktreeMainRepoPath =
+            await detectWorktreeMainRepoPath(getCwdState());
+        }
+        const baseConfig = convertToSandboxRuntimeConfig(
+          getSettings_DEPRECATED()
+        );
+        // Initialize with the user's ordinary configuration. acquireCustomConfig
+        // applies and leases the protected overlay immediately afterwards; this
+        // guarantees release restores the true baseline even on cold start.
+        await BaseSandboxManager.initialize(
+          baseConfig,
+          wrapSandboxAskCallback(configuredSandboxAskCallback)
+        );
+      } catch (error) {
+        initializationPromise = undefined;
+        throw error;
+      }
+    })();
+  }
+  await initializationPromise;
+  if (!BaseSandboxManager.isSandboxingEnabled()) {
+    throw new Error("Sandbox runtime failed to initialize.");
+  }
+  ensureSettingsSubscription();
 }
 
 /**
  * Initialize sandbox with log monitoring enabled by default
  */
 async function initialize(
-  sandboxAskCallback?: SandboxAskCallback,
+  sandboxAskCallback?: SandboxAskCallback
 ): Promise<void> {
+  if (sandboxAskCallback) configuredSandboxAskCallback = sandboxAskCallback;
   // If already initializing or initialized, return the promise
   if (initializationPromise) {
-    return initializationPromise
+    return initializationPromise;
   }
 
   // Check if sandboxing is enabled in settings
   if (!isSandboxingEnabled()) {
-    return
+    return;
   }
 
   // Wrap the callback to enforce allowManagedDomainsOnly policy.
   // This ensures all code paths (REPL, print/SDK) are covered.
-  const wrappedCallback: SandboxAskCallback | undefined = sandboxAskCallback
-    ? async (hostPattern: NetworkHostPattern) => {
-        if (shouldAllowManagedSandboxDomainsOnly()) {
-          logForDebugging(
-            `[sandbox] Blocked network request to ${hostPattern.host} (allowManagedDomainsOnly)`,
-          )
-          return false
-        }
-        return sandboxAskCallback(hostPattern)
-      }
-    : undefined
+  const wrappedCallback = wrapSandboxAskCallback(sandboxAskCallback);
 
   // Create the initialization promise synchronously (before any await) to prevent
   // race conditions where wrapWithSandbox() is called before the promise is assigned.
@@ -763,32 +901,25 @@ async function initialize(
       // subsequent refreshConfig() calls (which must be synchronous to avoid
       // race conditions where pending requests slip through with stale config).
       if (worktreeMainRepoPath === undefined) {
-        worktreeMainRepoPath = await detectWorktreeMainRepoPath(getCwdState())
+        worktreeMainRepoPath = await detectWorktreeMainRepoPath(getCwdState());
       }
 
-      const settings = getSettings_DEPRECATED()
-      const runtimeConfig = convertToSandboxRuntimeConfig(settings)
+      const settings = getSettings_DEPRECATED();
+      const runtimeConfig = convertToSandboxRuntimeConfig(settings);
 
       // Log monitor is automatically enabled for macOS
-      await BaseSandboxManager.initialize(runtimeConfig, wrappedCallback)
-
-      // Subscribe to settings changes to update sandbox config dynamically
-      settingsSubscriptionCleanup = settingsChangeDetector.subscribe(() => {
-        const settings = getSettings_DEPRECATED()
-        const newConfig = convertToSandboxRuntimeConfig(settings)
-        BaseSandboxManager.updateConfig(newConfig)
-        logForDebugging('Sandbox configuration updated from settings change')
-      })
+      await BaseSandboxManager.initialize(runtimeConfig, wrappedCallback);
+      ensureSettingsSubscription();
     } catch (error) {
       // Clear the promise on error so initialization can be retried
-      initializationPromise = undefined
+      initializationPromise = undefined;
 
       // Log error but don't throw - let sandboxing fail gracefully
-      logForDebugging(`Failed to initialize sandbox: ${errorMessage(error)}`)
+      logForDebugging(`Failed to initialize sandbox: ${errorMessage(error)}`);
     }
-  })()
+  })();
 
-  return initializationPromise
+  return initializationPromise;
 }
 
 /**
@@ -796,10 +927,10 @@ async function initialize(
  * Call this after updating permissions to avoid race conditions
  */
 function refreshConfig(): void {
-  if (!isSandboxingEnabled()) return
-  const settings = getSettings_DEPRECATED()
-  const newConfig = convertToSandboxRuntimeConfig(settings)
-  BaseSandboxManager.updateConfig(newConfig)
+  if (!isSandboxingEnabled()) return;
+  const settings = getSettings_DEPRECATED();
+  const newConfig = convertToSandboxRuntimeConfig(settings);
+  applySettingsSandboxConfig(newConfig);
 }
 
 /**
@@ -807,18 +938,23 @@ function refreshConfig(): void {
  */
 async function reset(): Promise<void> {
   // Clean up settings subscription
-  settingsSubscriptionCleanup?.()
-  settingsSubscriptionCleanup = undefined
-  worktreeMainRepoPath = undefined
-  bareGitRepoScrubPaths.length = 0
+  settingsSubscriptionCleanup?.();
+  settingsSubscriptionCleanup = undefined;
+  customConfigLeaseCount = 0;
+  leasedConfigSignature = undefined;
+  configBeforeCustomLease = undefined;
+  deferredSettingsConfig = undefined;
+  configuredSandboxAskCallback = undefined;
+  worktreeMainRepoPath = undefined;
+  bareGitRepoScrubPaths.length = 0;
 
   // Clear memoized caches
-  checkDependencies.cache.clear?.()
-  isSupportedPlatform.cache.clear?.()
-  initializationPromise = undefined
+  checkDependencies.cache.clear?.();
+  isSupportedPlatform.cache.clear?.();
+  initializationPromise = undefined;
 
   // Reset the base sandbox manager
-  return BaseSandboxManager.reset()
+  return BaseSandboxManager.reset();
 }
 
 /**
@@ -828,49 +964,49 @@ async function reset(): Promise<void> {
 export function addToExcludedCommands(
   command: string,
   permissionUpdates?: Array<{
-    type: string
-    rules: Array<{ toolName: string; ruleContent?: string }>
-  }>,
+    type: string;
+    rules: Array<{ toolName: string; ruleContent?: string }>;
+  }>
 ): string {
-  const existingSettings = getSettingsForSource('localSettings')
+  const existingSettings = getSettingsForSource("localSettings");
   const existingExcludedCommands =
-    existingSettings?.sandbox?.excludedCommands || []
+    existingSettings?.sandbox?.excludedCommands || [];
 
   // Determine the command pattern to add
   // If there are suggestions with Bash rules, extract the pattern (e.g., "npm run test" from "npm run test:*")
   // Otherwise use the exact command
-  let commandPattern: string = command
+  let commandPattern: string = command;
 
   if (permissionUpdates) {
     const bashSuggestions = permissionUpdates.filter(
-      update =>
-        update.type === 'addRules' &&
-        update.rules.some(rule => rule.toolName === BASH_TOOL_NAME),
-    )
+      (update) =>
+        update.type === "addRules" &&
+        update.rules.some((rule) => rule.toolName === BASH_TOOL_NAME)
+    );
 
-    if (bashSuggestions.length > 0 && bashSuggestions[0]!.type === 'addRules') {
+    if (bashSuggestions.length > 0 && bashSuggestions[0]!.type === "addRules") {
       const firstBashRule = bashSuggestions[0]!.rules.find(
-        rule => rule.toolName === BASH_TOOL_NAME,
-      )
+        (rule) => rule.toolName === BASH_TOOL_NAME
+      );
       if (firstBashRule?.ruleContent) {
         // Extract pattern from Bash(command) or Bash(command:*) format
-        const prefix = permissionRuleExtractPrefix(firstBashRule.ruleContent)
-        commandPattern = prefix || firstBashRule.ruleContent
+        const prefix = permissionRuleExtractPrefix(firstBashRule.ruleContent);
+        commandPattern = prefix || firstBashRule.ruleContent;
       }
     }
   }
 
   // Add to excludedCommands if not already present
   if (!existingExcludedCommands.includes(commandPattern)) {
-    updateSettingsForSource('localSettings', {
+    updateSettingsForSource("localSettings", {
       sandbox: {
         ...existingSettings?.sandbox,
         excludedCommands: [...existingExcludedCommands, commandPattern],
       },
-    })
+    });
   }
 
-  return commandPattern
+  return commandPattern;
 }
 
 // ============================================================================
@@ -878,47 +1014,53 @@ export function addToExcludedCommands(
 // ============================================================================
 
 export interface ISandboxManager {
-  initialize(sandboxAskCallback?: SandboxAskCallback): Promise<void>
-  isSupportedPlatform(): boolean
-  isPlatformInEnabledList(): boolean
-  getSandboxUnavailableReason(): string | undefined
-  isSandboxingEnabled(): boolean
-  isSandboxEnabledInSettings(): boolean
-  checkDependencies(): SandboxDependencyCheck
-  isAutoAllowBashIfSandboxedEnabled(): boolean
-  areUnsandboxedCommandsAllowed(): boolean
-  isSandboxRequired(): boolean
-  areSandboxSettingsLockedByPolicy(): boolean
+  initialize(sandboxAskCallback?: SandboxAskCallback): Promise<void>;
+  isSupportedPlatform(): boolean;
+  isPlatformInEnabledList(): boolean;
+  getSandboxUnavailableReason(): string | undefined;
+  isSandboxingEnabled(): boolean;
+  isSandboxEnabledInSettings(): boolean;
+  checkDependencies(): SandboxDependencyCheck;
+  isAutoAllowBashIfSandboxedEnabled(): boolean;
+  areUnsandboxedCommandsAllowed(): boolean;
+  isSandboxRequired(): boolean;
+  areSandboxSettingsLockedByPolicy(): boolean;
   setSandboxSettings(options: {
-    enabled?: boolean
-    autoAllowBashIfSandboxed?: boolean
-    allowUnsandboxedCommands?: boolean
-  }): Promise<void>
-  getFsReadConfig(): FsReadRestrictionConfig
-  getFsWriteConfig(): FsWriteRestrictionConfig
-  getNetworkRestrictionConfig(): NetworkRestrictionConfig
-  getAllowUnixSockets(): string[] | undefined
-  getAllowLocalBinding(): boolean | undefined
-  getIgnoreViolations(): IgnoreViolationsConfig | undefined
-  getEnableWeakerNestedSandbox(): boolean | undefined
-  getExcludedCommands(): string[]
-  getProxyPort(): number | undefined
-  getSocksProxyPort(): number | undefined
-  getLinuxHttpSocketPath(): string | undefined
-  getLinuxSocksSocketPath(): string | undefined
-  waitForNetworkInitialization(): Promise<boolean>
+    enabled?: boolean;
+    autoAllowBashIfSandboxed?: boolean;
+    allowUnsandboxedCommands?: boolean;
+  }): Promise<void>;
+  getFsReadConfig(): FsReadRestrictionConfig;
+  getFsWriteConfig(): FsWriteRestrictionConfig;
+  getNetworkRestrictionConfig(): NetworkRestrictionConfig;
+  getAllowUnixSockets(): string[] | undefined;
+  getAllowLocalBinding(): boolean | undefined;
+  getIgnoreViolations(): IgnoreViolationsConfig | undefined;
+  getEnableWeakerNestedSandbox(): boolean | undefined;
+  getExcludedCommands(): string[];
+  getProxyPort(): number | undefined;
+  getSocksProxyPort(): number | undefined;
+  getLinuxHttpSocketPath(): string | undefined;
+  getLinuxSocksSocketPath(): string | undefined;
+  waitForNetworkInitialization(): Promise<boolean>;
   wrapWithSandbox(
     command: string,
     binShell?: string,
     customConfig?: Partial<SandboxRuntimeConfig>,
-    abortSignal?: AbortSignal,
-  ): Promise<string>
-  cleanupAfterCommand(): void
-  getSandboxViolationStore(): SandboxViolationStore
-  annotateStderrWithSandboxFailures(command: string, stderr: string): string
-  getLinuxGlobPatternWarnings(): string[]
-  refreshConfig(): void
-  reset(): Promise<void>
+    abortSignal?: AbortSignal
+  ): Promise<string>;
+  ensureInitializedForCustomConfig(
+    customConfig?: Partial<SandboxRuntimeConfig>
+  ): Promise<void>;
+  acquireCustomConfig(
+    customConfig: Partial<SandboxRuntimeConfig>
+  ): Promise<() => void>;
+  cleanupAfterCommand(): void;
+  getSandboxViolationStore(): SandboxViolationStore;
+  annotateStderrWithSandboxFailures(command: string, stderr: string): string;
+  getLinuxGlobPatternWarnings(): string[];
+  refreshConfig(): void;
+  reset(): Promise<void>;
 }
 
 /**
@@ -938,6 +1080,8 @@ export const SandboxManager: ISandboxManager = {
   setSandboxSettings,
   getExcludedCommands,
   wrapWithSandbox,
+  ensureInitializedForCustomConfig,
+  acquireCustomConfig,
   refreshConfig,
   reset,
   checkDependencies,
@@ -961,10 +1105,10 @@ export const SandboxManager: ISandboxManager = {
   annotateStderrWithSandboxFailures:
     BaseSandboxManager.annotateStderrWithSandboxFailures,
   cleanupAfterCommand: (): void => {
-    BaseSandboxManager.cleanupAfterCommand()
-    scrubBareGitRepoFiles()
+    BaseSandboxManager.cleanupAfterCommand();
+    scrubBareGitRepoFiles();
   },
-}
+};
 
 // ============================================================================
 // Re-export types from sandbox-runtime
@@ -980,6 +1124,6 @@ export type {
   SandboxViolationEvent,
   SandboxRuntimeConfig,
   IgnoreViolationsConfig,
-}
+};
 
-export { SandboxViolationStore, SandboxRuntimeConfigSchema }
+export { SandboxViolationStore, SandboxRuntimeConfigSchema };

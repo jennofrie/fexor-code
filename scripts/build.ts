@@ -1,279 +1,295 @@
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   readdirSync,
   rmSync,
   statSync,
   writeFileSync,
-} from 'fs'
-import { basename, dirname, extname, join } from 'path'
+} from "fs";
+import { basename, dirname, extname, join } from "path";
+import {
+  cleanupAtomicOutput,
+  commitAtomicExecutable,
+  createAtomicOutputPath,
+} from "./atomicOutput.js";
 
-const pkg = await Bun.file(new URL('../package.json', import.meta.url)).json() as {
-  name: string
-  version: string
-}
+const pkg = (await Bun.file(
+  new URL("../package.json", import.meta.url)
+).json()) as {
+  name: string;
+  version: string;
+};
 
-const args = process.argv.slice(2)
-const compile = args.includes('--compile')
-const dev = args.includes('--dev')
+const args = process.argv.slice(2);
+const compile = args.includes("--compile");
+const dev = args.includes("--dev");
 
 const fullExperimentalFeatures = [
-  'AGENT_MEMORY_SNAPSHOT',
-  'AGENT_TRIGGERS',
-  'AGENT_TRIGGERS_REMOTE',
-  'AWAY_SUMMARY',
-  'BASH_CLASSIFIER',
-  'BRIDGE_MODE',
-  'BUILTIN_EXPLORE_PLAN_AGENTS',
-  'CACHED_MICROCOMPACT',
-  'CCR_AUTO_CONNECT',
-  'CCR_MIRROR',
-  'CCR_REMOTE_SETUP',
-  'COMPACTION_REMINDERS',
-  'CONNECTOR_TEXT',
-  'EXTRACT_MEMORIES',
-  'HISTORY_PICKER',
-  'HOOK_PROMPTS',
-  'KAIROS_BRIEF',
-  'KAIROS_CHANNELS',
-  'LODESTONE',
-  'MCP_RICH_OUTPUT',
-  'MESSAGE_ACTIONS',
-  'NATIVE_CLIPBOARD_IMAGE',
-  'NEW_INIT',
-  'POWERSHELL_AUTO_MODE',
-  'PROMPT_CACHE_BREAK_DETECTION',
-  'QUICK_SEARCH',
-  'SHOT_STATS',
-  'TEAMMEM',
-  'TOKEN_BUDGET',
-  'TREE_SITTER_BASH',
-  'TREE_SITTER_BASH_SHADOW',
-  'ULTRAPLAN',
-  'ULTRATHINK',
-  'UNATTENDED_RETRY',
-  'VERIFICATION_AGENT',
-  'VOICE_MODE',
+  "AGENT_MEMORY_SNAPSHOT",
+  "AGENT_TRIGGERS",
+  "AGENT_TRIGGERS_REMOTE",
+  "AWAY_SUMMARY",
+  "BASH_CLASSIFIER",
+  "BRIDGE_MODE",
+  "BUILTIN_EXPLORE_PLAN_AGENTS",
+  "CACHED_MICROCOMPACT",
+  "CCR_AUTO_CONNECT",
+  "CCR_MIRROR",
+  "CCR_REMOTE_SETUP",
+  "COMPACTION_REMINDERS",
+  "CONNECTOR_TEXT",
+  "EXTRACT_MEMORIES",
+  "HISTORY_PICKER",
+  "HOOK_PROMPTS",
+  "KAIROS_BRIEF",
+  "KAIROS_CHANNELS",
+  "LODESTONE",
+  "MCP_RICH_OUTPUT",
+  "MESSAGE_ACTIONS",
+  "NATIVE_CLIPBOARD_IMAGE",
+  "NEW_INIT",
+  "POWERSHELL_AUTO_MODE",
+  "PROMPT_CACHE_BREAK_DETECTION",
+  "QUICK_SEARCH",
+  "SHOT_STATS",
+  "TEAMMEM",
+  "TOKEN_BUDGET",
+  "TREE_SITTER_BASH",
+  "TREE_SITTER_BASH_SHADOW",
+  "ULTRAPLAN",
+  "ULTRATHINK",
+  "UNATTENDED_RETRY",
+  "VERIFICATION_AGENT",
+  "VOICE_MODE",
   // --- Reconstructed flags (Wave 1) — missing source files rebuilt to their
   // existing call-site contracts and verified to bundle individually. ---
-  'AUTO_THEME',
-  'BG_SESSIONS',
-  'BUDDY',
-  'COMMIT_ATTRIBUTION',
-  'CONTEXT_COLLAPSE',
-  'FORK_SUBAGENT',
-  'MCP_SKILLS',
-  'MONITOR_TOOL',
+  "AUTO_THEME",
+  "BG_SESSIONS",
+  "BUDDY",
+  "COMMIT_ATTRIBUTION",
+  "CONTEXT_COLLAPSE",
+  "FORK_SUBAGENT",
+  "MCP_SKILLS",
+  "MONITOR_TOOL",
   // --- Reconstructed flags (Wave 2) — backends already present; rebuilt lean. ---
-  'HISTORY_SNIP',
-  'REACTIVE_COMPACT',
-  'RUN_SKILL_GENERATOR',
-  'TEMPLATES',
-  'WEB_BROWSER_TOOL',
-] as const
+  "HISTORY_SNIP",
+  "REACTIVE_COMPACT",
+  "RUN_SKILL_GENERATOR",
+  "TEMPLATES",
+  "WEB_BROWSER_TOOL",
+] as const;
 
 function runCommand(cmd: string[]): string | null {
   const proc = Bun.spawnSync({
     cmd,
     cwd: process.cwd(),
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
+    stdout: "pipe",
+    stderr: "pipe",
+  });
 
   if (proc.exitCode !== 0) {
-    return null
+    return null;
   }
 
-  return new TextDecoder().decode(proc.stdout).trim() || null
+  return new TextDecoder().decode(proc.stdout).trim() || null;
 }
 
 function getDevVersion(baseVersion: string): string {
-  const timestamp = new Date().toISOString()
-  const date = timestamp.slice(0, 10).replaceAll('-', '')
-  const time = timestamp.slice(11, 19).replaceAll(':', '')
-  const sha = runCommand(['git', 'rev-parse', '--short=8', 'HEAD']) ?? 'unknown'
-  return `${baseVersion}-dev.${date}.t${time}.sha${sha}`
+  const timestamp = new Date().toISOString();
+  const date = timestamp.slice(0, 10).replaceAll("-", "");
+  const time = timestamp.slice(11, 19).replaceAll(":", "");
+  const sha =
+    runCommand(["git", "rev-parse", "--short=8", "HEAD"]) ?? "unknown";
+  return `${baseVersion}-dev.${date}.t${time}.sha${sha}`;
 }
 
 function getVersionChangelog(): string {
   return (
-    runCommand(['git', 'log', '--format=%h %s', '-20']) ??
-    'Local development build'
-  )
+    runCommand(["git", "log", "--format=%h %s", "-20"]) ??
+    "Local development build"
+  );
 }
 
-const defaultFeatures = ['VOICE_MODE']
-const featureSet = new Set(defaultFeatures)
+const defaultFeatures = ["VOICE_MODE"];
+const featureSet = new Set(defaultFeatures);
 for (let i = 0; i < args.length; i += 1) {
-  const arg = args[i]
-  if (arg === '--feature-set' && args[i + 1]) {
-    if (args[i + 1] === 'dev-full') {
+  const arg = args[i];
+  if (arg === "--feature-set" && args[i + 1]) {
+    if (args[i + 1] === "dev-full") {
       for (const feature of fullExperimentalFeatures) {
-        featureSet.add(feature)
+        featureSet.add(feature);
       }
     }
-    i += 1
-    continue
+    i += 1;
+    continue;
   }
-  if (arg === '--feature-set=dev-full') {
+  if (arg === "--feature-set=dev-full") {
     for (const feature of fullExperimentalFeatures) {
-      featureSet.add(feature)
+      featureSet.add(feature);
     }
-    continue
+    continue;
   }
-  if (arg === '--feature' && args[i + 1]) {
-    featureSet.add(args[i + 1]!)
-    i += 1
-    continue
+  if (arg === "--feature" && args[i + 1]) {
+    featureSet.add(args[i + 1]!);
+    i += 1;
+    continue;
   }
-  if (arg.startsWith('--feature=')) {
-    featureSet.add(arg.slice('--feature='.length))
+  if (arg.startsWith("--feature=")) {
+    featureSet.add(arg.slice("--feature=".length));
   }
 }
-const features = [...featureSet]
+const features = [...featureSet];
 
 const outfile = compile
   ? dev
-    ? './dist/cli-dev'
-    : './dist/cli'
+    ? "./dist/cli-dev"
+    : "./dist/cli"
   : dev
-    ? './cli-dev'
-    : './cli'
-const buildTime = new Date().toISOString()
-const version = dev ? getDevVersion(pkg.version) : pkg.version
+    ? "./cli-dev"
+    : "./cli";
+const buildTime = new Date().toISOString();
+const version = dev ? getDevVersion(pkg.version) : pkg.version;
+const temporaryOutfile = createAtomicOutputPath(outfile);
 
-const outDir = dirname(outfile)
-if (outDir !== '.') {
-  mkdirSync(outDir, { recursive: true })
+const outDir = dirname(outfile);
+if (outDir !== ".") {
+  mkdirSync(outDir, { recursive: true });
 }
 
 function collectFiles(dir: string): string[] {
   if (!existsSync(dir)) {
-    return []
+    return [];
   }
 
-  const files: string[] = []
+  const files: string[] = [];
   for (const entry of readdirSync(dir)) {
-    const path = join(dir, entry)
-    const stat = statSync(path)
+    const path = join(dir, entry);
+    const stat = statSync(path);
     if (stat.isDirectory()) {
-      files.push(...collectFiles(path))
+      files.push(...collectFiles(path));
     } else {
-      files.push(path)
+      files.push(path);
     }
   }
-  return files
+  return files;
 }
 
 function createCliJsShims(): string[] {
-  const cliDir = join(process.cwd(), 'src', 'cli')
-  const created: string[] = []
+  const cliDir = join(process.cwd(), "src", "cli");
+  const created: string[] = [];
 
   for (const source of collectFiles(cliDir)) {
-    const ext = extname(source)
-    if (ext !== '.ts' && ext !== '.tsx') {
-      continue
+    const ext = extname(source);
+    if (ext !== ".ts" && ext !== ".tsx") {
+      continue;
     }
-    if (source.endsWith('.d.ts')) {
-      continue
+    if (source.endsWith(".d.ts")) {
+      continue;
     }
 
-    const shim = source.slice(0, -ext.length) + '.js'
+    const shim = source.slice(0, -ext.length) + ".js";
     if (existsSync(shim)) {
-      continue
+      continue;
     }
 
-    writeFileSync(shim, `export * from './${basename(source)}';\n`)
-    created.push(shim)
+    writeFileSync(shim, `export * from './${basename(source)}';\n`);
+    created.push(shim);
   }
 
-  return created
+  return created;
 }
 
 const externals = [
-  '@ant/*',
-  'audio-capture-napi',
-  'image-processor-napi',
-  'modifiers-napi',
-  'url-handler-napi',
-]
+  "@ant/*",
+  "audio-capture-napi",
+  "image-processor-napi",
+  "modifiers-napi",
+  "url-handler-napi",
+];
 
 const defines = {
-  'process.env.USER_TYPE': JSON.stringify('external'),
-  'process.env.CLAUDE_CODE_FORCE_FULL_LOGO': JSON.stringify('true'),
-  ...(dev
-    ? { 'process.env.NODE_ENV': JSON.stringify('development') }
-    : {}),
+  "process.env.USER_TYPE": JSON.stringify("external"),
+  "process.env.CLAUDE_CODE_FORCE_FULL_LOGO": JSON.stringify("true"),
+  ...(dev ? { "process.env.NODE_ENV": JSON.stringify("development") } : {}),
   ...(dev
     ? {
-        'process.env.CLAUDE_CODE_EXPERIMENTAL_BUILD': JSON.stringify('true'),
+        "process.env.CLAUDE_CODE_EXPERIMENTAL_BUILD": JSON.stringify("true"),
       }
     : {}),
-  'process.env.CLAUDE_CODE_VERIFY_PLAN': JSON.stringify('false'),
-  'process.env.CCR_FORCE_BUNDLE': JSON.stringify('true'),
-  'MACRO.VERSION': JSON.stringify(version),
-  'MACRO.BUILD_TIME': JSON.stringify(buildTime),
-  'MACRO.PACKAGE_URL': JSON.stringify(pkg.name),
-  'MACRO.NATIVE_PACKAGE_URL': 'undefined',
-  'MACRO.FEEDBACK_CHANNEL': JSON.stringify('github'),
-  'MACRO.ISSUES_EXPLAINER': JSON.stringify(
-    'This reconstructed source snapshot does not include Anthropic internal issue routing.',
+  "process.env.CLAUDE_CODE_VERIFY_PLAN": JSON.stringify("false"),
+  "process.env.CCR_FORCE_BUNDLE": JSON.stringify("true"),
+  "MACRO.VERSION": JSON.stringify(version),
+  "MACRO.BUILD_TIME": JSON.stringify(buildTime),
+  "MACRO.PACKAGE_URL": JSON.stringify(pkg.name),
+  "MACRO.NATIVE_PACKAGE_URL": "undefined",
+  "MACRO.FEEDBACK_CHANNEL": JSON.stringify("github"),
+  "MACRO.ISSUES_EXPLAINER": JSON.stringify(
+    "This reconstructed source snapshot does not include Anthropic internal issue routing."
   ),
-  'MACRO.VERSION_CHANGELOG': JSON.stringify(
-    dev ? getVersionChangelog() : 'https://github.com/jennofrie/fexor-code',
+  "MACRO.VERSION_CHANGELOG": JSON.stringify(
+    dev ? getVersionChangelog() : "https://github.com/jennofrie/fexor-code"
   ),
-} as const
+} as const;
 
 const cmd = [
-  'bun',
-  'build',
-  './src/entrypoints/cli.tsx',
-  '--compile',
-  '--target',
-  'bun',
-  '--format',
-  'esm',
-  '--outfile',
-  outfile,
-  '--minify',
-  '--bytecode',
-  '--packages',
-  'bundle',
-  '--conditions',
-  'bun',
-]
+  "bun",
+  "build",
+  "./src/entrypoints/cli.tsx",
+  "--compile",
+  "--target",
+  "bun",
+  "--format",
+  "esm",
+  "--outfile",
+  temporaryOutfile,
+  "--minify",
+  "--bytecode",
+  "--packages",
+  "bundle",
+  "--conditions",
+  "bun",
+];
 
 for (const external of externals) {
-  cmd.push('--external', external)
+  cmd.push("--external", external);
 }
 
 for (const feature of features) {
-  cmd.push(`--feature=${feature}`)
+  cmd.push(`--feature=${feature}`);
 }
 
 for (const [key, value] of Object.entries(defines)) {
-  cmd.push('--define', `${key}=${value}`)
+  cmd.push("--define", `${key}=${value}`);
 }
 
-const generatedShims = createCliJsShims()
-const proc = Bun.spawnSync({
-  cmd,
-  cwd: process.cwd(),
-  stdout: 'inherit',
-  stderr: 'inherit',
-})
-
-for (const shim of generatedShims) {
-  rmSync(shim, { force: true })
+const generatedShims = createCliJsShims();
+let proc: ReturnType<typeof Bun.spawnSync>;
+try {
+  proc = Bun.spawnSync({
+    cmd,
+    cwd: process.cwd(),
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+} catch (error) {
+  cleanupAtomicOutput(temporaryOutfile);
+  throw error;
+} finally {
+  for (const shim of generatedShims) {
+    rmSync(shim, { force: true });
+  }
 }
 
 if (proc.exitCode !== 0) {
-  process.exit(proc.exitCode ?? 1)
+  cleanupAtomicOutput(temporaryOutfile);
+  process.exit(proc.exitCode ?? 1);
 }
 
-if (existsSync(outfile)) {
-  chmodSync(outfile, 0o755)
+try {
+  commitAtomicExecutable(temporaryOutfile, outfile);
+} catch (error) {
+  cleanupAtomicOutput(temporaryOutfile);
+  throw error;
 }
 
-console.log(`Built ${outfile}`)
+console.log(`Built ${outfile}`);

@@ -22,6 +22,10 @@ unlocked — including **13 flags reconstructed** from missing source files. See
 | Run from source | `bun run dev`                                                   |
 
 A full build is ~4 seconds. Binaries (`cli`, `cli-dev`, `dist/`) are git-ignored.
+Builds write each executable to a same-directory temporary file, set its mode,
+and atomically rename it over the destination only after a successful bundle.
+An interrupted or failed rebuild therefore leaves the prior runnable binary in
+place; already-running sessions continue using their open executable image.
 
 ## Architecture (orientation)
 
@@ -69,7 +73,8 @@ verify step for each.
 
 - Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`).
 - ESM with `.js` import specifiers resolving to `.ts`/`.tsx`; tools via `buildTool`; Zod v4.
-- No telemetry, no callbacks home. Never commit `.env*`, keys, or tokens.
+- No telemetry, no callbacks home. Never commit `.env*`, keys, tokens, or `tmp/`.
+- Third-party launchers append `prompts/autonomy-system-prompt.md` unless `FEXOR_AUTONOMY_PROMPT=0`.
 
 ## Agent skills
 

@@ -376,5 +376,8 @@ args=()
 if ! has_arg "--model" "$@"; then
   args+=(--model "$SELECTED_GROK_MODEL")
 fi
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/fexor-append-autonomy.inc.sh"
+fexor_maybe_append_autonomy "$@"
 
 exec "$SCRIPT_DIR/cli-dev" "${args[@]}" "$@"

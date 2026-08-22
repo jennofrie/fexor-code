@@ -163,16 +163,22 @@ flowchart LR
 
 Each provider has a dedicated, **tuned** launcher that maximizes its context window and tool-use fidelity:
 
-| Launcher                  | Model                                      | Context window | Highlights                                                                                |
-| ------------------------- | ------------------------------------------ | -------------: | ----------------------------------------------------------------------------------------- |
-| `fexor-launch.sh`         | Claude Opus 4.8 `[1m]`                     |         **1M** | native subscription, adaptive thinking, 128K output                                       |
-| `launch-claude-opus45.sh` | Claude Opus 4.8 `[1m]`                     |         **1M** | OAuth-clean, `/model` picker entry                                                        |
-| `launch-gpt.sh`           | GPT-5.5 (or 5.4)                           |     400K–1.05M | Codex adapter, `xhigh` reasoning, verbosity `medium`                                      |
-| `launch-grok.sh`          | Grok 4.5                                   |       **500K** | xAI OAuth (`~/.grok/auth.json`) or `XAI_API_KEY`, Anthropic-compatible Messages           |
-| `launch-fugu.sh`          | Sakana Fugu                                |         **1M** | OpenAI Responses adapter, isolated API-key config                                         |
-| `launch-nvidia.sh`        | GLM-5.2, DeepSeek V4-Pro/Flash, MiniMax M3 |         **1M** | NVIDIA free hosted NIM; model profiles, Keychain-backed API key, Chat Completions adapter |
-| `launch-deepseek.sh`      | DeepSeek V4-Pro-0813                       |         **1M** | stable hosted alias, max effort, 64K default / 384K maximum output                        |
-| `launch-qwen37.sh`        | Qwen 3.7-Max                               |         **1M** | beta-strip, prompt caching preserved                                                      |
+| Launcher                              | Model                                      | Context window | Highlights                                                                                      |
+| ------------------------------------- | ------------------------------------------ | -------------: | ----------------------------------------------------------------------------------------------- |
+| `fexor-launch.sh`                     | Claude Opus 4.8 `[1m]`                     |         **1M** | native subscription, adaptive thinking, 128K output                                             |
+| `launch-claude-opus45.sh`             | Claude Opus 4.8 `[1m]`                     |         **1M** | OAuth-clean, `/model` picker entry                                                              |
+| `launch-gpt.sh`                       | GPT-5.5 (or 5.4)                           |     400K–1.05M | Codex adapter, `xhigh` reasoning, verbosity `medium`                                            |
+| `launch-grok.sh`                      | Grok 4.5                                   |       **500K** | xAI OAuth (`~/.grok/auth.json`) or `XAI_API_KEY`, Anthropic-compatible Messages                 |
+| `launch-fugu.sh`                      | Sakana Fugu                                |         **1M** | OpenAI Responses adapter, isolated API-key config, Fugu-specific harness prompt                 |
+| `launch-nvidia.sh`                    | GLM-5.2, DeepSeek V4-Pro/Flash, MiniMax M3 |         **1M** | NVIDIA free hosted NIM; model profiles, Keychain-backed API key, Chat Completions adapter       |
+| `launch-glm.sh`                       | GLM 5.2 `[1m]` (5.3 selectable)            |         **1M** | Z.AI Anthropic-compatible API, max effort, autonomy addendum                                    |
+| `launch-deepseek.sh`                  | DeepSeek V4-Pro / Flash                    |         **1M** | Pro default (max effort); Flash via `--model deepseek-v4-flash` (high floor); 64K / 384K output |
+| `launch-qwen37.sh`                    | Qwen 3.7-Max                               |         **1M** | beta-strip, prompt caching preserved                                                            |
+| `launch-qwen36-abliterated-runpod.sh` | local/RunPod Qwen abliterated GGUF         |     up to 256K | llama.cpp / LiteLLM; `--bare` default                                                           |
+
+Third-party launchers (DeepSeek, NVIDIA, Grok, GPT, Qwen, GLM) append `prompts/autonomy-system-prompt.md` by default — a short “don’t moralize, assume authorized research” addendum. This does **not** uncensored the model weights. Disable with `FEXOR_AUTONOMY_PROMPT=0`. GLM’s copy lives at `prompts/glm-autonomy-system-prompt.md`. Fugu keeps its own prompt. Anthropic OAuth launchers do not append it.
+
+Opt-in GLM coding harness (verifier + LSP + discipline prompt): `FEXOR_CODING_HARNESS=1 ./launch-glm.sh`. Contract: **[docs/VERIFICATION_CONTRACT.md](docs/VERIFICATION_CONTRACT.md)**.
 
 The NVIDIA launcher accepts either a short profile name or the exact NIM model
 ID:
@@ -204,14 +210,15 @@ regular, non-symlinked file with `0600` permissions.
 <details>
 <summary><b>Context windows at a glance</b></summary>
 
-| Model                  |                Context | Max output | Notes                                                   |
-| ---------------------- | ---------------------: | ---------: | ------------------------------------------------------- |
-| Claude Sonnet 5        |              1,000,000 |    128,000 | native default, no `[1m]` required                      |
-| Claude Opus 4.8 `[1m]` |              1,000,000 |    128,000 | native 1M                                               |
-| GPT-5.4                |              1,050,000 |    128,000 | xhigh reasoning                                         |
-| GPT-5.5                | 1,000,000 (400K Codex) |          — | strongest long-context                                  |
-| DeepSeek V4-Pro-0813   |              1,000,000 |    384,000 | hosted as `deepseek-v4-pro`; reasoning consumes context |
-| Qwen 3.7-Max           |              1,000,000 |     65,536 | agent-tuned, verbose                                    |
+| Model                  |                Context | Max output | Notes                                                       |
+| ---------------------- | ---------------------: | ---------: | ----------------------------------------------------------- |
+| Claude Sonnet 5        |              1,000,000 |    128,000 | native default, no `[1m]` required                          |
+| Claude Opus 4.8 `[1m]` |              1,000,000 |    128,000 | native 1M                                                   |
+| GPT-5.4                |              1,050,000 |    128,000 | xhigh reasoning                                             |
+| GPT-5.5                | 1,000,000 (400K Codex) |          — | strongest long-context                                      |
+| DeepSeek V4-Pro-0813   |              1,000,000 |    384,000 | hosted as `deepseek-v4-pro`; reasoning consumes context     |
+| DeepSeek V4-Flash-0731 |              1,000,000 |    384,000 | `--model deepseek-v4-flash`; launcher effort floor **high** |
+| Qwen 3.7-Max           |              1,000,000 |     65,536 | agent-tuned, verbose                                        |
 
 </details>
 
@@ -251,6 +258,9 @@ bun run build:dev:full   # → ./cli-dev (all experimental flags)
 ./cli --model claude-opus-4-8      # specify model
 ./launch-gpt.sh                    # GPT-5.5 via Codex
 ./launch-deepseek.sh               # DeepSeek V4-Pro (1M, max effort)
+./launch-deepseek.sh --model deepseek-v4-flash   # Flash, effort high
+FEXOR_AUTONOMY_PROMPT=0 ./launch-deepseek.sh     # skip autonomy addendum
+./launch-glm.sh                    # GLM 5.2, autonomy addendum on
 ./cli ps                           # list background sessions (BG_SESSIONS)
 ```
 

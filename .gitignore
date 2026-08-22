@@ -13,6 +13,12 @@ openclaw/
 graphify-out/
 .graphify_analysis.json
 
+# Locked harness-evaluation artifacts (manifests, transcripts, diffs, reports).
+scripts/eval/results/
+
+# scratch / local notes (never publish)
+tmp/
+
 # local agent / tooling state — not for the public repo
 .claude/
 .antigravitycli/

@@ -1,34 +1,38 @@
-import { feature } from 'bun:bundle'
-import type { UUID } from 'crypto'
-import { randomUUID } from 'crypto'
-import uniqBy from 'lodash-es/uniqBy.js'
-import { logForDebugging } from 'src/utils/debug.js'
-import { getProjectRoot, getSessionId } from '../../bootstrap/state.js'
-import { getCommand, getSkillToolCommands, hasCommand } from '../../commands.js'
+import { feature } from "bun:bundle";
+import type { UUID } from "crypto";
+import { randomUUID } from "crypto";
+import uniqBy from "lodash-es/uniqBy.js";
+import { logForDebugging } from "src/utils/debug.js";
+import { getProjectRoot, getSessionId } from "../../bootstrap/state.js";
+import {
+  getCommand,
+  getSkillToolCommands,
+  hasCommand,
+} from "../../commands.js";
 import {
   DEFAULT_AGENT_PROMPT,
   enhanceSystemPromptWithEnvDetails,
-} from '../../constants/prompts.js'
-import type { QuerySource } from '../../constants/querySource.js'
-import { getSystemContext, getUserContext } from '../../context.js'
-import type { CanUseToolFn } from '../../hooks/useCanUseTool.js'
-import { query } from '../../query.js'
-import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
-import { getDumpPromptsPath } from '../../services/api/dumpPrompts.js'
-import { cleanupAgentTracking } from '../../services/api/promptCacheBreakDetection.js'
+} from "../../constants/prompts.js";
+import type { QuerySource } from "../../constants/querySource.js";
+import { getSystemContext, getUserContext } from "../../context.js";
+import type { CanUseToolFn } from "../../hooks/useCanUseTool.js";
+import { query } from "../../query.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import { getDumpPromptsPath } from "../../services/api/dumpPrompts.js";
+import { cleanupAgentTracking } from "../../services/api/promptCacheBreakDetection.js";
 import {
   connectToServer,
   fetchToolsForClient,
-} from '../../services/mcp/client.js'
-import { getMcpConfigByName } from '../../services/mcp/config.js'
+} from "../../services/mcp/client.js";
+import { getMcpConfigByName } from "../../services/mcp/config.js";
 import type {
   MCPServerConnection,
   ScopedMcpServerConfig,
-} from '../../services/mcp/types.js'
-import type { Tool, Tools, ToolUseContext } from '../../Tool.js'
-import { killShellTasksForAgent } from '../../tasks/LocalShellTask/killShellTasks.js'
-import type { Command } from '../../types/command.js'
-import type { AgentId } from '../../types/ids.js'
+} from "../../services/mcp/types.js";
+import type { Tool, Tools, ToolUseContext } from "../../Tool.js";
+import { killShellTasksForAgent } from "../../tasks/LocalShellTask/killShellTasks.js";
+import type { Command } from "../../types/command.js";
+import type { AgentId } from "../../types/ids.js";
 import type {
   AssistantMessage,
   Message,
@@ -39,48 +43,48 @@ import type {
   TombstoneMessage,
   ToolUseSummaryMessage,
   UserMessage,
-} from '../../types/message.js'
-import { createAttachmentMessage } from '../../utils/attachments.js'
-import { AbortError } from '../../utils/errors.js'
-import { getDisplayPath } from '../../utils/file.js'
+} from "../../types/message.js";
+import { createAttachmentMessage } from "../../utils/attachments.js";
+import { AbortError } from "../../utils/errors.js";
+import { getDisplayPath } from "../../utils/file.js";
 import {
   cloneFileStateCache,
   createFileStateCacheWithSizeLimit,
   READ_FILE_STATE_CACHE_SIZE,
-} from '../../utils/fileStateCache.js'
+} from "../../utils/fileStateCache.js";
 import {
   type CacheSafeParams,
   createSubagentContext,
-} from '../../utils/forkedAgent.js'
-import { registerFrontmatterHooks } from '../../utils/hooks/registerFrontmatterHooks.js'
-import { clearSessionHooks } from '../../utils/hooks/sessionHooks.js'
-import { executeSubagentStartHooks } from '../../utils/hooks.js'
-import { createUserMessage } from '../../utils/messages.js'
-import { getAgentModel } from '../../utils/model/agent.js'
-import type { ModelAlias } from '../../utils/model/aliases.js'
+} from "../../utils/forkedAgent.js";
+import { registerFrontmatterHooks } from "../../utils/hooks/registerFrontmatterHooks.js";
+import { clearSessionHooks } from "../../utils/hooks/sessionHooks.js";
+import { executeSubagentStartHooks } from "../../utils/hooks.js";
+import { createUserMessage } from "../../utils/messages.js";
+import { getAgentModel } from "../../utils/model/agent.js";
+import type { ModelAlias } from "../../utils/model/aliases.js";
 import {
   clearAgentTranscriptSubdir,
   recordSidechainTranscript,
   setAgentTranscriptSubdir,
   writeAgentMetadata,
-} from '../../utils/sessionStorage.js'
+} from "../../utils/sessionStorage.js";
 import {
   isRestrictedToPluginOnly,
   isSourceAdminTrusted,
-} from '../../utils/settings/pluginOnlyPolicy.js'
+} from "../../utils/settings/pluginOnlyPolicy.js";
 import {
   asSystemPrompt,
   type SystemPrompt,
-} from '../../utils/systemPromptType.js'
+} from "../../utils/systemPromptType.js";
 import {
   isPerfettoTracingEnabled,
   registerAgent as registerPerfettoAgent,
   unregisterAgent as unregisterPerfettoAgent,
-} from '../../utils/telemetry/perfettoTracing.js'
-import type { ContentReplacementState } from '../../utils/toolResultStorage.js'
-import { createAgentId } from '../../utils/uuid.js'
-import { resolveAgentTools } from './agentToolUtils.js'
-import { type AgentDefinition, isBuiltInAgent } from './loadAgentsDir.js'
+} from "../../utils/telemetry/perfettoTracing.js";
+import type { ContentReplacementState } from "../../utils/toolResultStorage.js";
+import { createAgentId } from "../../utils/uuid.js";
+import { resolveAgentTools } from "./agentToolUtils.js";
+import { type AgentDefinition, isBuiltInAgent } from "./loadAgentsDir.js";
 
 /**
  * Initialize agent-specific MCP servers
@@ -94,11 +98,11 @@ import { type AgentDefinition, isBuiltInAgent } from './loadAgentsDir.js'
  */
 async function initializeAgentMcpServers(
   agentDefinition: AgentDefinition,
-  parentClients: MCPServerConnection[],
+  parentClients: MCPServerConnection[]
 ): Promise<{
-  clients: MCPServerConnection[]
-  tools: Tools
-  cleanup: () => Promise<void>
+  clients: MCPServerConnection[];
+  tools: Tools;
+  cleanup: () => Promise<void>;
 }> {
   // If no agent-specific servers defined, return parent clients as-is
   if (!agentDefinition.mcpServers?.length) {
@@ -106,7 +110,7 @@ async function initializeAgentMcpServers(
       clients: parentClients,
       tools: [],
       cleanup: async () => {},
-    }
+    };
   }
 
   // When MCP is locked to plugin-only, skip frontmatter MCP servers for
@@ -114,80 +118,80 @@ async function initializeAgentMcpServers(
   // are admin-trusted — their frontmatter MCP is part of the admin-approved
   // surface. Blocking them (as the first cut did) breaks plugin agents that
   // legitimately need MCP, contradicting "plugin-provided always loads."
-  const agentIsAdminTrusted = isSourceAdminTrusted(agentDefinition.source)
-  if (isRestrictedToPluginOnly('mcp') && !agentIsAdminTrusted) {
+  const agentIsAdminTrusted = isSourceAdminTrusted(agentDefinition.source);
+  if (isRestrictedToPluginOnly("mcp") && !agentIsAdminTrusted) {
     logForDebugging(
-      `[Agent: ${agentDefinition.agentType}] Skipping MCP servers: strictPluginOnlyCustomization locks MCP to plugin-only (agent source: ${agentDefinition.source})`,
-    )
+      `[Agent: ${agentDefinition.agentType}] Skipping MCP servers: strictPluginOnlyCustomization locks MCP to plugin-only (agent source: ${agentDefinition.source})`
+    );
     return {
       clients: parentClients,
       tools: [],
       cleanup: async () => {},
-    }
+    };
   }
 
-  const agentClients: MCPServerConnection[] = []
+  const agentClients: MCPServerConnection[] = [];
   // Track which clients were newly created (inline definitions) vs. shared from parent
   // Only newly created clients should be cleaned up when the agent finishes
-  const newlyCreatedClients: MCPServerConnection[] = []
-  const agentTools: Tool[] = []
+  const newlyCreatedClients: MCPServerConnection[] = [];
+  const agentTools: Tool[] = [];
 
   for (const spec of agentDefinition.mcpServers) {
-    let config: ScopedMcpServerConfig | null = null
-    let name: string
-    let isNewlyCreated = false
+    let config: ScopedMcpServerConfig | null = null;
+    let name: string;
+    let isNewlyCreated = false;
 
-    if (typeof spec === 'string') {
+    if (typeof spec === "string") {
       // Reference by name - look up in existing MCP configs
       // This uses the memoized connectToServer, so we may get a shared client
-      name = spec
-      config = getMcpConfigByName(spec)
+      name = spec;
+      config = getMcpConfigByName(spec);
       if (!config) {
         logForDebugging(
           `[Agent: ${agentDefinition.agentType}] MCP server not found: ${spec}`,
-          { level: 'warn' },
-        )
-        continue
+          { level: "warn" }
+        );
+        continue;
       }
     } else {
       // Inline definition as { [name]: config }
       // These are agent-specific servers that should be cleaned up
-      const entries = Object.entries(spec)
+      const entries = Object.entries(spec);
       if (entries.length !== 1) {
         logForDebugging(
           `[Agent: ${agentDefinition.agentType}] Invalid MCP server spec: expected exactly one key`,
-          { level: 'warn' },
-        )
-        continue
+          { level: "warn" }
+        );
+        continue;
       }
-      const [serverName, serverConfig] = entries[0]!
-      name = serverName
+      const [serverName, serverConfig] = entries[0]!;
+      name = serverName;
       config = {
         ...serverConfig,
-        scope: 'dynamic' as const,
-      } as ScopedMcpServerConfig
-      isNewlyCreated = true
+        scope: "dynamic" as const,
+      } as ScopedMcpServerConfig;
+      isNewlyCreated = true;
     }
 
     // Connect to the server
-    const client = await connectToServer(name, config)
-    agentClients.push(client)
+    const client = await connectToServer(name, config);
+    agentClients.push(client);
     if (isNewlyCreated) {
-      newlyCreatedClients.push(client)
+      newlyCreatedClients.push(client);
     }
 
     // Fetch tools if connected
-    if (client.type === 'connected') {
-      const tools = await fetchToolsForClient(client)
-      agentTools.push(...tools)
+    if (client.type === "connected") {
+      const tools = await fetchToolsForClient(client);
+      agentTools.push(...tools);
       logForDebugging(
-        `[Agent: ${agentDefinition.agentType}] Connected to MCP server '${name}' with ${tools.length} tools`,
-      )
+        `[Agent: ${agentDefinition.agentType}] Connected to MCP server '${name}' with ${tools.length} tools`
+      );
     } else {
       logForDebugging(
         `[Agent: ${agentDefinition.agentType}] Failed to connect to MCP server '${name}': ${client.type}`,
-        { level: 'warn' },
-      )
+        { level: "warn" }
+      );
     }
   }
 
@@ -196,25 +200,25 @@ async function initializeAgentMcpServers(
   // Shared clients (referenced by string name) are memoized and used by the parent context
   const cleanup = async () => {
     for (const client of newlyCreatedClients) {
-      if (client.type === 'connected') {
+      if (client.type === "connected") {
         try {
-          await client.cleanup()
+          await client.cleanup();
         } catch (error) {
           logForDebugging(
             `[Agent: ${agentDefinition.agentType}] Error cleaning up MCP server '${client.name}': ${error}`,
-            { level: 'warn' },
-          )
+            { level: "warn" }
+          );
         }
       }
     }
-  }
+  };
 
   // Return merged clients (parent + agent-specific) and agent tools
   return {
     clients: [...parentClients, ...agentClients],
     tools: agentTools,
     cleanup,
-  }
+  };
 }
 
 type QueryMessage =
@@ -222,27 +226,27 @@ type QueryMessage =
   | RequestStartEvent
   | Message
   | ToolUseSummaryMessage
-  | TombstoneMessage
+  | TombstoneMessage;
 
 /**
  * Type guard to check if a message from query() is a recordable Message type.
  * Matches the types we want to record: assistant, user, progress, or system compact_boundary.
  */
 function isRecordableMessage(
-  msg: QueryMessage,
+  msg: QueryMessage
 ): msg is
   | AssistantMessage
   | UserMessage
   | ProgressMessage
   | SystemCompactBoundaryMessage {
   return (
-    msg.type === 'assistant' ||
-    msg.type === 'user' ||
-    msg.type === 'progress' ||
-    (msg.type === 'system' &&
-      'subtype' in msg &&
-      msg.subtype === 'compact_boundary')
-  )
+    msg.type === "assistant" ||
+    msg.type === "user" ||
+    msg.type === "progress" ||
+    (msg.type === "system" &&
+      "subtype" in msg &&
+      msg.subtype === "compact_boundary")
+  );
 }
 
 export async function* runAgent({
@@ -264,123 +268,127 @@ export async function* runAgent({
   contentReplacementState,
   useExactTools,
   worktreePath,
+  verificationIsolation,
   description,
   transcriptSubdir,
   onQueryProgress,
 }: {
-  agentDefinition: AgentDefinition
-  promptMessages: Message[]
-  toolUseContext: ToolUseContext
-  canUseTool: CanUseToolFn
-  isAsync: boolean
+  agentDefinition: AgentDefinition;
+  promptMessages: Message[];
+  toolUseContext: ToolUseContext;
+  canUseTool: CanUseToolFn;
+  isAsync: boolean;
   /** Whether this agent can show permission prompts. Defaults to !isAsync.
    * Set to true for in-process teammates that run async but share the terminal. */
-  canShowPermissionPrompts?: boolean
-  forkContextMessages?: Message[]
-  querySource: QuerySource
+  canShowPermissionPrompts?: boolean;
+  forkContextMessages?: Message[];
+  querySource: QuerySource;
   override?: {
-    userContext?: { [k: string]: string }
-    systemContext?: { [k: string]: string }
-    systemPrompt?: SystemPrompt
-    abortController?: AbortController
-    agentId?: AgentId
-  }
-  model?: ModelAlias
-  maxTurns?: number
+    userContext?: { [k: string]: string };
+    systemContext?: { [k: string]: string };
+    systemPrompt?: SystemPrompt;
+    abortController?: AbortController;
+    agentId?: AgentId;
+  };
+  model?: ModelAlias;
+  maxTurns?: number;
   /** Preserve toolUseResult on messages for subagents with viewable transcripts */
-  preserveToolUseResults?: boolean
+  preserveToolUseResults?: boolean;
   /** Precomputed tool pool for the worker agent. Computed by the caller
    * (AgentTool.tsx) to avoid a circular dependency between runAgent and tools.ts.
    * Always contains the full tool pool assembled with the worker's own permission
    * mode, independent of the parent's tool restrictions. */
-  availableTools: Tools
+  availableTools: Tools;
   /** Tool permission rules to add to the agent's session allow rules.
    * When provided, replaces ALL allow rules so the agent only has what's
    * explicitly listed (parent approvals don't leak through). */
-  allowedTools?: string[]
+  allowedTools?: string[];
   /** Optional callback invoked with CacheSafeParams after constructing the agent's
    * system prompt, context, and tools. Used by background summarization to fork
    * the agent's conversation for periodic progress summaries. */
-  onCacheSafeParams?: (params: CacheSafeParams) => void
+  onCacheSafeParams?: (params: CacheSafeParams) => void;
   /** Replacement state reconstructed from a resumed sidechain transcript so
    * the same tool results are re-replaced (prompt cache stability). When
    * omitted, createSubagentContext clones the parent's state. */
-  contentReplacementState?: ContentReplacementState
+  contentReplacementState?: ContentReplacementState;
   /** When true, use availableTools directly without filtering through
    * resolveAgentTools(). Also inherits the parent's thinkingConfig and
    * isNonInteractiveSession instead of overriding them. Used by the fork
    * subagent path to produce byte-identical API request prefixes for
    * prompt cache hits. */
-  useExactTools?: boolean
+  useExactTools?: boolean;
   /** Worktree path if the agent was spawned with isolation: "worktree".
    * Persisted to metadata so resume can restore the correct cwd. */
-  worktreePath?: string
+  worktreePath?: string;
+  /** Snapshot and temporary roots for the protected verifier. */
+  verificationIsolation?: ToolUseContext["verificationIsolation"];
   /** Original task description from AgentTool input. Persisted to metadata
    * so a resumed agent's notification can show the original description. */
-  description?: string
+  description?: string;
   /** Optional subdirectory under subagents/ to group this agent's transcript
    * with related ones (e.g. workflows/<runId> for workflow subagents). */
-  transcriptSubdir?: string
+  transcriptSubdir?: string;
   /** Optional callback fired on every message yielded by query() — including
    * stream_event deltas that runAgent otherwise drops. Use to detect liveness
    * during long single-block streams (e.g. thinking) where no assistant
    * message is yielded for >60s. */
-  onQueryProgress?: () => void
+  onQueryProgress?: () => void;
 }): AsyncGenerator<Message, void> {
   // Track subagent usage for feature discovery
 
-  const appState = toolUseContext.getAppState()
-  const permissionMode = appState.toolPermissionContext.mode
+  const appState = toolUseContext.getAppState();
+  const permissionMode = appState.toolPermissionContext.mode;
   // Always-shared channel to the root AppState store. toolUseContext.setAppState
   // is a no-op when the *parent* is itself an async agent (nested async→async),
   // so session-scoped writes (hooks, bash tasks) must go through this instead.
   const rootSetAppState =
-    toolUseContext.setAppStateForTasks ?? toolUseContext.setAppState
+    toolUseContext.setAppStateForTasks ?? toolUseContext.setAppState;
 
   const resolvedAgentModel = getAgentModel(
     agentDefinition.model,
     toolUseContext.options.mainLoopModel,
     model,
     permissionMode,
-  )
+    agentDefinition.forceParentModel === true
+  );
 
-  const agentId = override?.agentId ? override.agentId : createAgentId()
+  const agentId = override?.agentId ? override.agentId : createAgentId();
 
   // Route this agent's transcript into a grouping subdirectory if requested
   // (e.g. workflow subagents write to subagents/workflows/<runId>/).
   if (transcriptSubdir) {
-    setAgentTranscriptSubdir(agentId, transcriptSubdir)
+    setAgentTranscriptSubdir(agentId, transcriptSubdir);
   }
 
   // Register agent in Perfetto trace for hierarchy visualization
   if (isPerfettoTracingEnabled()) {
-    const parentId = toolUseContext.agentId ?? getSessionId()
-    registerPerfettoAgent(agentId, agentDefinition.agentType, parentId)
+    const parentId = toolUseContext.agentId ?? getSessionId();
+    registerPerfettoAgent(agentId, agentDefinition.agentType, parentId);
   }
 
   // Log API calls path for subagents (ant-only)
-  if (process.env.USER_TYPE === 'ant') {
+  if (process.env.USER_TYPE === "ant") {
     logForDebugging(
-      `[Subagent ${agentDefinition.agentType}] API calls: ${getDisplayPath(getDumpPromptsPath(agentId))}`,
-    )
+      `[Subagent ${agentDefinition.agentType}] API calls: ${getDisplayPath(getDumpPromptsPath(agentId))}`
+    );
   }
 
   // Handle message forking for context sharing
   // Filter out incomplete tool calls from parent messages to avoid API errors
   const contextMessages: Message[] = forkContextMessages
     ? filterIncompleteToolCalls(forkContextMessages)
-    : []
-  const initialMessages: Message[] = [...contextMessages, ...promptMessages]
+    : [];
+  const initialMessages: Message[] = [...contextMessages, ...promptMessages];
 
   const agentReadFileState =
     forkContextMessages !== undefined
       ? cloneFileStateCache(toolUseContext.readFileState)
-      : createFileStateCacheWithSizeLimit(READ_FILE_STATE_CACHE_SIZE)
+      : createFileStateCacheWithSizeLimit(READ_FILE_STATE_CACHE_SIZE);
 
   const [baseUserContext, baseSystemContext] = await Promise.all([
     override?.userContext ?? getUserContext(),
     override?.systemContext ?? getSystemContext(),
-  ])
+  ]);
 
   // Read-only agents (Explore, Plan) don't act on commit/PR/lint rules from
   // CLAUDE.md — the main agent has full context and interprets their output.
@@ -390,47 +398,47 @@ export async function* runAgent({
   const shouldOmitClaudeMd =
     agentDefinition.omitClaudeMd &&
     !override?.userContext &&
-    getFeatureValue_CACHED_MAY_BE_STALE('tengu_slim_subagent_claudemd', true)
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_slim_subagent_claudemd", true);
   const { claudeMd: _omittedClaudeMd, ...userContextNoClaudeMd } =
-    baseUserContext
+    baseUserContext;
   const resolvedUserContext = shouldOmitClaudeMd
     ? userContextNoClaudeMd
-    : baseUserContext
+    : baseUserContext;
 
   // Explore/Plan are read-only search agents — the parent-session-start
   // gitStatus (up to 40KB, explicitly labeled stale) is dead weight. If they
   // need git info they run `git status` themselves and get fresh data.
   // Saves ~1-3 Gtok/week fleet-wide.
   const { gitStatus: _omittedGitStatus, ...systemContextNoGit } =
-    baseSystemContext
+    baseSystemContext;
   const resolvedSystemContext =
-    agentDefinition.agentType === 'Explore' ||
-    agentDefinition.agentType === 'Plan'
+    agentDefinition.agentType === "Explore" ||
+    agentDefinition.agentType === "Plan"
       ? systemContextNoGit
-      : baseSystemContext
+      : baseSystemContext;
 
   // Override permission mode if agent defines one
   // However, don't override if parent is in bypassPermissions or acceptEdits mode - those should always take precedence
   // For async agents, also set shouldAvoidPermissionPrompts since they can't show UI
-  const agentPermissionMode = agentDefinition.permissionMode
+  const agentPermissionMode = agentDefinition.permissionMode;
   const agentGetAppState = () => {
-    const state = toolUseContext.getAppState()
-    let toolPermissionContext = state.toolPermissionContext
+    const state = toolUseContext.getAppState();
+    let toolPermissionContext = state.toolPermissionContext;
 
     // Override permission mode if agent defines one (unless parent is bypassPermissions, acceptEdits, or auto)
     if (
       agentPermissionMode &&
-      state.toolPermissionContext.mode !== 'bypassPermissions' &&
-      state.toolPermissionContext.mode !== 'acceptEdits' &&
+      state.toolPermissionContext.mode !== "bypassPermissions" &&
+      state.toolPermissionContext.mode !== "acceptEdits" &&
       !(
-        feature('TRANSCRIPT_CLASSIFIER') &&
-        state.toolPermissionContext.mode === 'auto'
+        feature("TRANSCRIPT_CLASSIFIER") &&
+        state.toolPermissionContext.mode === "auto"
       )
     ) {
       toolPermissionContext = {
         ...toolPermissionContext,
         mode: agentPermissionMode,
-      }
+      };
     }
 
     // Set flag to auto-deny prompts for agents that can't show UI
@@ -440,14 +448,14 @@ export async function* runAgent({
     const shouldAvoidPrompts =
       canShowPermissionPrompts !== undefined
         ? !canShowPermissionPrompts
-        : agentPermissionMode === 'bubble'
+        : agentPermissionMode === "bubble"
           ? false
-          : isAsync
+          : isAsync;
     if (shouldAvoidPrompts) {
       toolPermissionContext = {
         ...toolPermissionContext,
         shouldAvoidPermissionPrompts: true,
-      }
+      };
     }
 
     // For background agents that can show prompts, await automated checks
@@ -459,7 +467,7 @@ export async function* runAgent({
       toolPermissionContext = {
         ...toolPermissionContext,
         awaitAutomatedChecksBeforeDialog: true,
-      }
+      };
     }
 
     // Scope tool permissions: when allowedTools is provided, use them as session rules.
@@ -475,35 +483,35 @@ export async function* runAgent({
           // Use the provided allowedTools as session-level permissions
           session: [...allowedTools],
         },
-      }
+      };
     }
 
     // Override effort level if agent defines one
     const effortValue =
       agentDefinition.effort !== undefined
         ? agentDefinition.effort
-        : state.effortValue
+        : state.effortValue;
 
     if (
       toolPermissionContext === state.toolPermissionContext &&
       effortValue === state.effortValue
     ) {
-      return state
+      return state;
     }
     return {
       ...state,
       toolPermissionContext,
       effortValue,
-    }
-  }
+    };
+  };
 
   const resolvedTools = useExactTools
     ? availableTools
-    : resolveAgentTools(agentDefinition, availableTools, isAsync).resolvedTools
+    : resolveAgentTools(agentDefinition, availableTools, isAsync).resolvedTools;
 
   const additionalWorkingDirectories = Array.from(
-    appState.toolPermissionContext.additionalWorkingDirectories.keys(),
-  )
+    appState.toolPermissionContext.additionalWorkingDirectories.keys()
+  );
 
   const agentSystemPrompt = override?.systemPrompt
     ? override.systemPrompt
@@ -513,9 +521,9 @@ export async function* runAgent({
           toolUseContext,
           resolvedAgentModel,
           additionalWorkingDirectories,
-          resolvedTools,
-        ),
-      )
+          resolvedTools
+        )
+      );
 
   // Determine abortController:
   // - Override takes precedence
@@ -525,33 +533,35 @@ export async function* runAgent({
     ? override.abortController
     : isAsync
       ? new AbortController()
-      : toolUseContext.abortController
+      : toolUseContext.abortController;
 
   // Execute SubagentStart hooks and collect additional context
-  const additionalContexts: string[] = []
-  for await (const hookResult of executeSubagentStartHooks(
-    agentId,
-    agentDefinition.agentType,
-    agentAbortController.signal,
-  )) {
-    if (
-      hookResult.additionalContexts &&
-      hookResult.additionalContexts.length > 0
-    ) {
-      additionalContexts.push(...hookResult.additionalContexts)
+  const additionalContexts: string[] = [];
+  if (!agentDefinition.disableSubagentHooks) {
+    for await (const hookResult of executeSubagentStartHooks(
+      agentId,
+      agentDefinition.agentType,
+      agentAbortController.signal
+    )) {
+      if (
+        hookResult.additionalContexts &&
+        hookResult.additionalContexts.length > 0
+      ) {
+        additionalContexts.push(...hookResult.additionalContexts);
+      }
     }
   }
 
   // Add SubagentStart hook context as a user message (consistent with SessionStart/UserPromptSubmit)
   if (additionalContexts.length > 0) {
     const contextMessage = createAttachmentMessage({
-      type: 'hook_additional_context',
+      type: "hook_additional_context",
       content: additionalContexts,
-      hookName: 'SubagentStart',
+      hookName: "SubagentStart",
       toolUseID: randomUUID(),
-      hookEvent: 'SubagentStart',
-    })
-    initialMessages.push(contextMessage)
+      hookEvent: "SubagentStart",
+    });
+    initialMessages.push(contextMessage);
   }
 
   // Register agent's frontmatter hooks (scoped to agent lifecycle)
@@ -562,28 +572,32 @@ export async function* runAgent({
   // blanket-blocking all session hooks at execution time (which would
   // also kill plugin agents' hooks).
   const hooksAllowedForThisAgent =
-    !isRestrictedToPluginOnly('hooks') ||
-    isSourceAdminTrusted(agentDefinition.source)
-  if (agentDefinition.hooks && hooksAllowedForThisAgent) {
+    !isRestrictedToPluginOnly("hooks") ||
+    isSourceAdminTrusted(agentDefinition.source);
+  if (
+    !agentDefinition.disableSubagentHooks &&
+    agentDefinition.hooks &&
+    hooksAllowedForThisAgent
+  ) {
     registerFrontmatterHooks(
       rootSetAppState,
       agentId,
       agentDefinition.hooks,
       `agent '${agentDefinition.agentType}'`,
-      true, // isAgent - converts Stop to SubagentStop
-    )
+      true // isAgent - converts Stop to SubagentStop
+    );
   }
 
   // Preload skills from agent frontmatter
-  const skillsToPreload = agentDefinition.skills ?? []
+  const skillsToPreload = agentDefinition.skills ?? [];
   if (skillsToPreload.length > 0) {
-    const allSkills = await getSkillToolCommands(getProjectRoot())
+    const allSkills = await getSkillToolCommands(getProjectRoot());
 
     // Filter valid skills and warn about missing ones
     const validSkills: Array<{
-      skillName: string
-      skill: (typeof allSkills)[0] & { type: 'prompt' }
-    }> = []
+      skillName: string;
+      skill: (typeof allSkills)[0] & { type: "prompt" };
+    }> = [];
 
     for (const skillName of skillsToPreload) {
       // Resolve the skill name, trying multiple strategies:
@@ -593,78 +607,80 @@ export async function* runAgent({
       const resolvedName = resolveSkillName(
         skillName,
         allSkills,
-        agentDefinition,
-      )
+        agentDefinition
+      );
       if (!resolvedName) {
         logForDebugging(
           `[Agent: ${agentDefinition.agentType}] Warning: Skill '${skillName}' specified in frontmatter was not found`,
-          { level: 'warn' },
-        )
-        continue
+          { level: "warn" }
+        );
+        continue;
       }
 
-      const skill = getCommand(resolvedName, allSkills)
-      if (skill.type !== 'prompt') {
+      const skill = getCommand(resolvedName, allSkills);
+      if (skill.type !== "prompt") {
         logForDebugging(
           `[Agent: ${agentDefinition.agentType}] Warning: Skill '${skillName}' is not a prompt-based skill`,
-          { level: 'warn' },
-        )
-        continue
+          { level: "warn" }
+        );
+        continue;
       }
-      validSkills.push({ skillName, skill })
+      validSkills.push({ skillName, skill });
     }
 
     // Load all skill contents concurrently and add to initial messages
-    const { formatSkillLoadingMetadata } = await import(
-      '../../utils/processUserInput/processSlashCommand.js'
-    )
+    const { formatSkillLoadingMetadata } =
+      await import("../../utils/processUserInput/processSlashCommand.js");
     const loaded = await Promise.all(
       validSkills.map(async ({ skillName, skill }) => ({
         skillName,
         skill,
-        content: await skill.getPromptForCommand('', toolUseContext),
-      })),
-    )
+        content: await skill.getPromptForCommand("", toolUseContext),
+      }))
+    );
     for (const { skillName, skill, content } of loaded) {
       logForDebugging(
-        `[Agent: ${agentDefinition.agentType}] Preloaded skill '${skillName}'`,
-      )
+        `[Agent: ${agentDefinition.agentType}] Preloaded skill '${skillName}'`
+      );
 
       // Add command-message metadata so the UI shows which skill is loading
       const metadata = formatSkillLoadingMetadata(
         skillName,
-        skill.progressMessage,
-      )
+        skill.progressMessage
+      );
 
       initialMessages.push(
         createUserMessage({
-          content: [{ type: 'text', text: metadata }, ...content],
+          content: [{ type: "text", text: metadata }, ...content],
           isMeta: true,
-        }),
-      )
+        })
+      );
     }
   }
 
   // Initialize agent-specific MCP servers (additive to parent's servers)
+  const mcpAgentDefinition = agentDefinition.disableInheritedMcp
+    ? { ...agentDefinition, mcpServers: undefined }
+    : agentDefinition;
+  const inheritedMcpClients = agentDefinition.disableInheritedMcp
+    ? []
+    : toolUseContext.options.mcpClients;
   const {
     clients: mergedMcpClients,
     tools: agentMcpTools,
     cleanup: mcpCleanup,
-  } = await initializeAgentMcpServers(
-    agentDefinition,
-    toolUseContext.options.mcpClients,
-  )
+  } = await initializeAgentMcpServers(mcpAgentDefinition, inheritedMcpClients);
 
   // Merge agent MCP tools with resolved agent tools, deduplicating by name.
   // resolvedTools is already deduplicated (see resolveAgentTools), so skip
   // the spread + uniqBy overhead when there are no agent-specific MCP tools.
   const allTools =
     agentMcpTools.length > 0
-      ? uniqBy([...resolvedTools, ...agentMcpTools], 'name')
-      : resolvedTools
+      ? uniqBy([...resolvedTools, ...agentMcpTools], "name")
+      : resolvedTools;
 
   // Build agent-specific options
-  const agentOptions: ToolUseContext['options'] = {
+  const agentOptions: ToolUseContext["options"] = {
     isNonInteractiveSession: useExactTools
       ? toolUseContext.options.isNonInteractiveSession
       : isAsync
@@ -681,9 +697,11 @@ export async function* runAgent({
     // sub-agents, disable thinking to control output token costs.
     thinkingConfig: useExactTools
       ? toolUseContext.options.thinkingConfig
-      : { type: 'disabled' as const },
+      : { type: "disabled" as const },
     mcpClients: mergedMcpClients,
-    mcpResources: toolUseContext.options.mcpResources,
+    mcpResources: agentDefinition.disableInheritedMcp
+      ? {}
+      : toolUseContext.options.mcpResources,
     agentDefinitions: toolUseContext.options.agentDefinitions,
     // Fork children (useExactTools path) need querySource on context.options
     // for the recursive-fork guard at AgentTool.tsx call() — it checks
@@ -692,7 +710,7 @@ export async function* runAgent({
     // reads undefined and only the message-scan fallback fires — which
     // autocompact defeats by replacing the fork-boilerplate message.
     ...(useExactTools && { querySource }),
-  }
+  };
 
   // Create subagent context using shared helper
   // - Sync agents share setAppState, setResponseLength, abortController with parent
@@ -711,11 +729,16 @@ export async function* runAgent({
     criticalSystemReminder_EXPERIMENTAL:
       agentDefinition.criticalSystemReminder_EXPERIMENTAL,
     contentReplacementState,
-  })
+    verificationRole: agentDefinition.mustCompleteBeforeParentContinues
+      ? "verifier"
+      : undefined,
+    verificationIsolation,
+    disableExternalHooks: agentDefinition.disableSubagentHooks === true,
+  });
 
   // Preserve tool use results for subagents with viewable transcripts (in-process teammates)
   if (preserveToolUseResults) {
-    agentToolUseContext.preserveToolUseResults = true
+    agentToolUseContext.preserveToolUseResults = true;
   }
 
   // Expose cache-safe params for background summarization (prompt cache sharing)
@@ -726,23 +749,25 @@ export async function* runAgent({
       systemContext: resolvedSystemContext,
       toolUseContext: agentToolUseContext,
       forkContextMessages: initialMessages,
-    })
+    });
   }
 
   // Record initial messages before the query loop starts, plus the agentType
   // so resume can route correctly when subagent_type is omitted. Both writes
   // are fire-and-forget — persistence failure shouldn't block the agent.
-  void recordSidechainTranscript(initialMessages, agentId).catch(_err =>
-    logForDebugging(`Failed to record sidechain transcript: ${_err}`),
-  )
+  void recordSidechainTranscript(initialMessages, agentId).catch((_err) =>
+    logForDebugging(`Failed to record sidechain transcript: ${_err}`)
+  );
   void writeAgentMetadata(agentId, {
     agentType: agentDefinition.agentType,
     ...(worktreePath && { worktreePath }),
     ...(description && { description }),
-  }).catch(_err => logForDebugging(`Failed to write agent metadata: ${_err}`))
+  }).catch((_err) =>
+    logForDebugging(`Failed to write agent metadata: ${_err}`)
+  );
 
   // Track the last recorded message UUID for parent chain continuity
-  let lastRecordedUuid: UUID | null = initialMessages.at(-1)?.uuid ?? null
+  let lastRecordedUuid: UUID | null = initialMessages.at(-1)?.uuid ?? null;
 
   try {
     for await (const message of query({
@@ -755,22 +780,22 @@ export async function* runAgent({
       querySource,
       maxTurns: maxTurns ?? agentDefinition.maxTurns,
     })) {
-      onQueryProgress?.()
+      onQueryProgress?.();
       // Forward subagent API request starts to parent's metrics display
       // so TTFT/OTPS update during subagent execution.
       if (
-        message.type === 'stream_event' &&
-        message.event.type === 'message_start' &&
+        message.type === "stream_event" &&
+        message.event.type === "message_start" &&
         message.ttftMs != null
       ) {
-        toolUseContext.pushApiMetricsEntry?.(message.ttftMs)
-        continue
+        toolUseContext.pushApiMetricsEntry?.(message.ttftMs);
+        continue;
       }
 
       // Yield attachment messages (e.g., structured_output) without recording them
-      if (message.type === 'attachment') {
+      if (message.type === "attachment") {
         // Handle max turns reached signal from query.ts
-        if (message.attachment.type === 'max_turns_reached') {
+        if (message.attachment.type === "max_turns_reached") {
           logForDebugging(
             `[Agent
 : $
@@ -781,12 +806,12 @@ export async function* runAgent({
 {
   message.attachment.maxTurns
 }
-)`,
-          )
-          break
+)`
+          );
+          break;
         }
-        yield message
-        continue
+        yield message;
+        continue;
       }
 
       if (isRecordableMessage(message)) {
@@ -794,66 +819,70 @@ export async function* runAgent({
         await recordSidechainTranscript(
           [message],
           agentId,
-          lastRecordedUuid,
-        ).catch(err =>
-          logForDebugging(`Failed to record sidechain transcript: ${err}`),
-        )
-        if (message.type !== 'progress') {
-          lastRecordedUuid = message.uuid
+          lastRecordedUuid
+        ).catch((err) =>
+          logForDebugging(`Failed to record sidechain transcript: ${err}`)
+        );
+        if (message.type !== "progress") {
+          lastRecordedUuid = message.uuid;
         }
-        yield message
+        yield message;
       }
     }
 
     if (agentAbortController.signal.aborted) {
-      throw new AbortError()
+      throw new AbortError();
     }
 
     // Run callback if provided (only built-in agents have callbacks)
     if (isBuiltInAgent(agentDefinition) && agentDefinition.callback) {
-      agentDefinition.callback()
+      agentDefinition.callback();
     }
   } finally {
     // Clean up agent-specific MCP servers (runs on normal completion, abort, or error)
-    await mcpCleanup()
+    await mcpCleanup();
     // Clean up agent's session hooks
-    if (agentDefinition.hooks) {
-      clearSessionHooks(rootSetAppState, agentId)
+    if (agentDefinition.hooks && !agentDefinition.disableSubagentHooks) {
+      clearSessionHooks(rootSetAppState, agentId);
     }
     // Clean up prompt cache tracking state for this agent
-    if (feature('PROMPT_CACHE_BREAK_DETECTION')) {
-      cleanupAgentTracking(agentId)
+    if (feature("PROMPT_CACHE_BREAK_DETECTION")) {
+      cleanupAgentTracking(agentId);
     }
     // Release cloned file state cache memory
-    agentToolUseContext.readFileState.clear()
+    agentToolUseContext.readFileState.clear();
     // Release the cloned fork context messages
-    initialMessages.length = 0
+    initialMessages.length = 0;
     // Release perfetto agent registry entry
-    unregisterPerfettoAgent(agentId)
+    unregisterPerfettoAgent(agentId);
     // Release transcript subdir mapping
-    clearAgentTranscriptSubdir(agentId)
+    clearAgentTranscriptSubdir(agentId);
     // Release this agent's todos entry. Without this, every subagent that
     // called TodoWrite leaves a key in AppState.todos forever (even after all
     // items complete, the value is [] but the key stays). Whale sessions
     // spawn hundreds of agents; each orphaned key is a small leak that adds up.
-    rootSetAppState(prev => {
-      if (!(agentId in prev.todos)) return prev
-      const { [agentId]: _removed, ...todos } = prev.todos
-      return { ...prev, todos }
-    })
+    rootSetAppState((prev) => {
+      if (!(agentId in prev.todos)) return prev;
+      const { [agentId]: _removed, ...todos } = prev.todos;
+      return { ...prev, todos };
+    });
     // Kill any background bash tasks this agent spawned. Without this, a
     // `run_in_background` shell loop (e.g. test fixture fake-logs.sh) outlives
     // the agent as a PPID=1 zombie once the main session eventually exits.
-    killShellTasksForAgent(agentId, toolUseContext.getAppState, rootSetAppState)
+    killShellTasksForAgent(
+      agentId,
+      toolUseContext.getAppState,
+      rootSetAppState
+    );
     /* eslint-disable @typescript-eslint/no-require-imports */
-    if (feature('MONITOR_TOOL')) {
+    if (feature("MONITOR_TOOL")) {
       const mcpMod =
-        require('../../tasks/MonitorMcpTask/MonitorMcpTask.js') as typeof import('../../tasks/MonitorMcpTask/MonitorMcpTask.js')
+        require("../../tasks/MonitorMcpTask/MonitorMcpTask.js") as typeof import("../../tasks/MonitorMcpTask/MonitorMcpTask.js");
       mcpMod.killMonitorMcpTasksForAgent(
         agentId,
         toolUseContext.getAppState,
-        rootSetAppState,
-      )
+        rootSetAppState
+      );
     }
     /* eslint-enable @typescript-eslint/no-require-imports */
   }
@@ -865,16 +894,16 @@ export async function* runAgent({
  */
 export function filterIncompleteToolCalls(messages: Message[]): Message[] {
   // Build a set of tool use IDs that have results
-  const toolUseIdsWithResults = new Set<string>()
+  const toolUseIdsWithResults = new Set<string>();
 
   for (const message of messages) {
-    if (message?.type === 'user') {
-      const userMessage = message as UserMessage
-      const content = userMessage.message.content
+    if (message?.type === "user") {
+      const userMessage = message as UserMessage;
+      const content = userMessage.message.content;
       if (Array.isArray(content)) {
         for (const block of content) {
-          if (block.type === 'tool_result' && block.tool_use_id) {
-            toolUseIdsWithResults.add(block.tool_use_id)
+          if (block.type === "tool_result" && block.tool_use_id) {
+            toolUseIdsWithResults.add(block.tool_use_id);
           }
         }
       }
@@ -882,52 +911,52 @@ export function filterIncompleteToolCalls(messages: Message[]): Message[] {
   }
 
   // Filter out assistant messages that contain tool calls without results
-  return messages.filter(message => {
-    if (message?.type === 'assistant') {
-      const assistantMessage = message as AssistantMessage
-      const content = assistantMessage.message.content
+  return messages.filter((message) => {
+    if (message?.type === "assistant") {
+      const assistantMessage = message as AssistantMessage;
+      const content = assistantMessage.message.content;
       if (Array.isArray(content)) {
         // Check if this assistant message has any tool uses without results
         const hasIncompleteToolCall = content.some(
-          block =>
-            block.type === 'tool_use' &&
+          (block) =>
+            block.type === "tool_use" &&
             block.id &&
-            !toolUseIdsWithResults.has(block.id),
-        )
+            !toolUseIdsWithResults.has(block.id)
+        );
         // Exclude messages with incomplete tool calls
-        return !hasIncompleteToolCall
+        return !hasIncompleteToolCall;
       }
     }
     // Keep all non-assistant messages and assistant messages without tool calls
-    return true
-  })
+    return true;
+  });
 }
 
 async function getAgentSystemPrompt(
   agentDefinition: AgentDefinition,
-  toolUseContext: Pick<ToolUseContext, 'options'>,
+  toolUseContext: Pick<ToolUseContext, "options">,
   resolvedAgentModel: string,
   additionalWorkingDirectories: string[],
-  resolvedTools: readonly Tool[],
+  resolvedTools: readonly Tool[]
 ): Promise<string[]> {
-  const enabledToolNames = new Set(resolvedTools.map(t => t.name))
+  const enabledToolNames = new Set(resolvedTools.map((t) => t.name));
   try {
-    const agentPrompt = agentDefinition.getSystemPrompt({ toolUseContext })
-    const prompts = [agentPrompt]
+    const agentPrompt = agentDefinition.getSystemPrompt({ toolUseContext });
+    const prompts = [agentPrompt];
 
     return await enhanceSystemPromptWithEnvDetails(
       prompts,
       resolvedAgentModel,
       additionalWorkingDirectories,
-      enabledToolNames,
-    )
+      enabledToolNames
+    );
   } catch (_error) {
     return enhanceSystemPromptWithEnvDetails(
       [DEFAULT_AGENT_PROMPT],
       resolvedAgentModel,
       additionalWorkingDirectories,
-      enabledToolNames,
-    )
+      enabledToolNames
+    );
   }
 }
 
@@ -945,29 +974,29 @@ async function getAgentSystemPrompt(
 function resolveSkillName(
   skillName: string,
   allSkills: Command[],
-  agentDefinition: AgentDefinition,
+  agentDefinition: AgentDefinition
 ): string | null {
   // 1. Direct match
   if (hasCommand(skillName, allSkills)) {
-    return skillName
+    return skillName;
   }
 
   // 2. Try prefixing with the agent's plugin name
   // Plugin agents have agentType like "pluginName:agentName"
-  const pluginPrefix = agentDefinition.agentType.split(':')[0]
+  const pluginPrefix = agentDefinition.agentType.split(":")[0];
   if (pluginPrefix) {
-    const qualifiedName = `${pluginPrefix}:${skillName}`
+    const qualifiedName = `${pluginPrefix}:${skillName}`;
     if (hasCommand(qualifiedName, allSkills)) {
-      return qualifiedName
+      return qualifiedName;
     }
   }
 
   // 3. Suffix match — find a skill whose name ends with ":skillName"
-  const suffix = `:${skillName}`
-  const match = allSkills.find(cmd => cmd.name.endsWith(suffix))
+  const suffix = `:${skillName}`;
+  const match = allSkills.find((cmd) => cmd.name.endsWith(suffix));
   if (match) {
-    return match.name
+    return match.name;
   }
 
-  return null
+  return null;
 }

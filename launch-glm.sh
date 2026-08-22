@@ -3,6 +3,7 @@
 #
 # Usage:
 #   ./launch-glm.sh
+#   # Run the same command in up to three terminals; a fourth launch is rejected.
 #   ./launch-glm.sh -p "review this change"
 #   GLM_MODEL=glm-5.2 ./launch-glm.sh --model glm-5.2
 #   GLM_MODEL=glm-5.3[1m] ./launch-glm.sh --model glm-5.3[1m]
@@ -61,24 +62,147 @@ selected_model() {
   echo "$model"
 }
 
-existing_glm_sessions() {
-  ps -axo pid=,command= | awk '
-    /\/fexor-code-main\/cli-dev/ && /--model(=| )glm-/ {
-      sub(/^[[:space:]]+/, "", $0)
-      print
-    }
-  '
+GLM_MAX_INSTANCES=3
+GLM_LAUNCH_STATE_DIR="$CLAUDE_CONFIG_DIR/.glm-launch-slots"
+GLM_LAUNCH_LOCK="$GLM_LAUNCH_STATE_DIR/.lock"
+GLM_PROCESS_OWNER=""
+
+process_owner() {
+  local pid="$1"
+  local started_at
+  if [[ ! "$pid" =~ '^[1-9][0-9]*$' ]]; then
+    return 1
+  fi
+  started_at="$(ps -p "$pid" -o lstart= 2>/dev/null)" || return 1
+  if [[ -z "$started_at" ]]; then
+    return 1
+  fi
+  print -r -- "$pid|$started_at"
 }
 
-if [[ "${GLM_ALLOW_CONCURRENT:-0}" != "1" ]]; then
-  existing_sessions="$(existing_glm_sessions)"
-  if [[ -n "$existing_sessions" ]]; then
-    echo "[launch-glm] ERROR: another GLM fexor-code session is already running." >&2
-    echo "  Stop that session first, or relaunch with GLM_ALLOW_CONCURRENT=1 if you intentionally want parallel GLM sessions." >&2
-    echo "$existing_sessions" >&2
-    exit 1
+owner_is_live() {
+  local owner="$1"
+  local pid
+  if [[ "$owner" != *"|"* ]]; then
+    return 1
   fi
-  unset existing_sessions
+  pid="${owner%%|*}"
+  [[ "$(process_owner "$pid")" == "$owner" ]]
+}
+
+running_glm_pids() {
+  local pid command
+  while read -r pid command; do
+    if [[ ( "$command" == "$SCRIPT_DIR/cli-dev" || "$command" == "$SCRIPT_DIR/cli-dev "* ) &&
+          ( "$command" == *"--model glm-"* || "$command" == *"--model=glm-"* ) ]]; then
+      print -r -- "$pid"
+    fi
+  done < <(ps -axo pid=,command=)
+}
+
+release_glm_launch_lock() {
+  local lock_owner
+  lock_owner="$(readlink "$GLM_LAUNCH_LOCK" 2>/dev/null)" || return 0
+  if [[ "$lock_owner" == "$GLM_PROCESS_OWNER" ]]; then
+    rm -f -- "$GLM_LAUNCH_LOCK"
+  fi
+}
+
+acquire_glm_launch_lock() {
+  local attempt lock_owner
+  mkdir -p "$GLM_LAUNCH_STATE_DIR" || return 1
+  chmod 700 "$GLM_LAUNCH_STATE_DIR" 2>/dev/null || true
+  GLM_PROCESS_OWNER="$(process_owner "$$")" || return 1
+
+  for (( attempt = 1; attempt <= 100; attempt++ )); do
+    if ln -s "$GLM_PROCESS_OWNER" "$GLM_LAUNCH_LOCK" 2>/dev/null; then
+      trap release_glm_launch_lock EXIT
+      return 0
+    fi
+    if [[ -L "$GLM_LAUNCH_LOCK" ]]; then
+      lock_owner="$(readlink "$GLM_LAUNCH_LOCK" 2>/dev/null)"
+      if ! owner_is_live "$lock_owner"; then
+        rm -f -- "$GLM_LAUNCH_LOCK"
+        continue
+      fi
+    elif [[ -e "$GLM_LAUNCH_LOCK" ]]; then
+      echo "[launch-glm] ERROR: invalid launch-lock state at $GLM_LAUNCH_LOCK." >&2
+      return 1
+    fi
+    sleep 0.05
+  done
+
+  echo "[launch-glm] ERROR: timed out waiting for the GLM launch lock." >&2
+  return 1
+}
+
+slot_has_owner() {
+  local wanted_owner="$1"
+  local index slot owner
+  for (( index = 1; index <= GLM_MAX_INSTANCES; index++ )); do
+    slot="$GLM_LAUNCH_STATE_DIR/slot-$index"
+    owner="$(readlink "$slot" 2>/dev/null)" || continue
+    if [[ "$owner" == "$wanted_owner" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+reserve_glm_slot() {
+  local owner="$1"
+  local index slot
+  for (( index = 1; index <= GLM_MAX_INSTANCES; index++ )); do
+    slot="$GLM_LAUNCH_STATE_DIR/slot-$index"
+    if ln -s "$owner" "$slot" 2>/dev/null; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+claim_glm_launch_slot() {
+  local index slot owner pid
+  if ! acquire_glm_launch_lock; then
+    return 1
+  fi
+
+  # Reclaim slots left by clean exits, crashes, or PID reuse.
+  for (( index = 1; index <= GLM_MAX_INSTANCES; index++ )); do
+    slot="$GLM_LAUNCH_STATE_DIR/slot-$index"
+    if [[ -L "$slot" ]]; then
+      owner="$(readlink "$slot" 2>/dev/null)"
+      if ! owner_is_live "$owner"; then
+        rm -f -- "$slot"
+      fi
+    elif [[ -e "$slot" ]]; then
+      echo "[launch-glm] ERROR: invalid launch-slot state at $slot." >&2
+      return 1
+    fi
+  done
+
+  # Adopt sessions started by the previous launcher implementation so an
+  # in-place upgrade cannot temporarily exceed the three-instance cap.
+  while IFS= read -r pid; do
+    owner="$(process_owner "$pid")" || continue
+    if ! slot_has_owner "$owner"; then
+      reserve_glm_slot "$owner" || break
+    fi
+  done < <(running_glm_pids)
+
+  if ! reserve_glm_slot "$GLM_PROCESS_OWNER"; then
+    echo "[launch-glm] ERROR: $GLM_MAX_INSTANCES GLM fexor-code instances are already running (maximum $GLM_MAX_INSTANCES)." >&2
+    echo "  Close one GLM session, then run ./launch-glm.sh again." >&2
+    return 1
+  fi
+
+  release_glm_launch_lock
+  trap - EXIT
+  return 0
+}
+
+if ! claim_glm_launch_slot; then
+  exit 1
 fi
 
 if [[ -f "$SCRIPT_DIR/.env.glm" ]]; then
@@ -145,8 +269,8 @@ export CLAUDE_CODE_AUTO_COMPACT_WINDOW="${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-10000
 # increase capacity pressure. Opt in with GLM_MAX_OUTPUT_TOKENS=128000 when needed.
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS="${CLAUDE_CODE_MAX_OUTPUT_TOKENS:-${GLM_MAX_OUTPUT_TOKENS:-32000}}"
 
-# GLM-5.2 advertises high/max reasoning effort. The source allowlist preserves
-# max instead of clamping it to high.
+# GLM-5.2 and GLM-5.3 advertise high/max reasoning effort. The source allowlist
+# preserves max instead of clamping it to high.
 export ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES="thinking,effort,max_effort"
 export ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES="thinking,effort,max_effort"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES="thinking,effort"
@@ -164,13 +288,29 @@ export CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1
 # exhausting the normal retry count and surfacing a final API error.
 export CLAUDE_CODE_UNATTENDED_RETRY="${CLAUDE_CODE_UNATTENDED_RETRY:-1}"
 
-# Lock /model to the GLM choices in this isolated config.
+# Lock /model to the GLM choices in this isolated config. Writes are atomic so
+# simultaneous launcher starts cannot leave either shared JSON file truncated.
 python3 - "$CLAUDE_CONFIG_DIR" "$DEFAULT_GLM_MODEL" "$ANTHROPIC_DEFAULT_HAIKU_MODEL" "$GLM_53_MODEL" <<'PY' 2>/dev/null || true
-import json, pathlib, sys
+import json, os, pathlib, sys
 base = pathlib.Path(sys.argv[1]); base.mkdir(parents=True, exist_ok=True)
 glm = sys.argv[2]
 haiku = sys.argv[3]
 glm53 = sys.argv[4]
+
+def atomic_write_json(path, data):
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with tmp.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    finally:
+        try: tmp.unlink()
+        except FileNotFoundError: pass
+
 options = [
     {
         "value": glm53,
@@ -195,21 +335,57 @@ options = [
 cj = base / ".claude.json"
 try: d = json.loads(cj.read_text())
 except Exception: d = {}
-d["additionalModelOptionsCache"] = options
-cj.write_text(json.dumps(d, indent=2))
+if d.get("additionalModelOptionsCache") != options:
+    d["additionalModelOptionsCache"] = options
+    atomic_write_json(cj, d)
 
 sj = base / "settings.json"
 try: s = json.loads(sj.read_text())
 except Exception: s = {}
-s["model"] = glm
-s["availableModels"] = [glm53, glm, haiku]
-sj.write_text(json.dumps(s, indent=2))
+available_models = [glm53, glm, haiku]
+if s.get("model") != glm or s.get("availableModels") != available_models:
+    s["model"] = glm
+    s["availableModels"] = available_models
+    atomic_write_json(sj, s)
 PY
 
 # Voice (/voice) is claude.ai OAuth-only in this codebase, so external API-key
 # providers like GLM should use the Claude launchers for voice transcription.
 
 GLM_DEFAULT_AUTONOMY_PROMPT_FILE="${GLM_AUTONOMY_PROMPT_FILE:-$SCRIPT_DIR/prompts/glm-autonomy-system-prompt.md}"
+FEXOR_CODING_PROMPT_FILE="$SCRIPT_DIR/prompts/glm-coding-harness-prompt.md"
+FEXOR_LSP_SETTINGS_FILE="$SCRIPT_DIR/prompts/harness-lsp-settings.json"
+FEXOR_HARNESS_ENABLED=0
+FEXOR_HARNESS_LSP_ENABLED=0
+FEXOR_HARNESS_PROMPT_ENABLED=0
+
+# The coding harness is deliberately opt-in. Keep all legacy launcher defaults
+# byte-for-byte equivalent unless the caller selects the exact master value 1.
+if [[ "${FEXOR_CODING_HARNESS:-0}" == "1" ]]; then
+  FEXOR_HARNESS_ENABLED=1
+  export FEXOR_CODING_HARNESS=1
+  export FEXOR_ENABLE_VERIFICATION_AGENT="${FEXOR_ENABLE_VERIFICATION_AGENT:-1}"
+  export FEXOR_ENABLE_CODING_PROMPT="${FEXOR_ENABLE_CODING_PROMPT:-1}"
+
+  case "$FEXOR_ENABLE_CODING_PROMPT" in
+    1|true|TRUE|yes|YES|on|ON) FEXOR_HARNESS_PROMPT_ENABLED=1 ;;
+  esac
+
+  case "${ENABLE_LSP_TOOL:-1}" in
+    1|true|TRUE|yes|YES|on|ON)
+      if [[ -f "$FEXOR_LSP_SETTINGS_FILE" ]]; then
+        export ENABLE_LSP_TOOL=1
+        FEXOR_HARNESS_LSP_ENABLED=1
+        if [[ ! -d "$CLAUDE_CONFIG_DIR/plugins/cache/claude-plugins-official/rust-analyzer-lsp" ]]; then
+          echo "[launch-glm] WARNING: rust-analyzer-lsp plugin is enabled but not installed in $CLAUDE_CONFIG_DIR/plugins/." >&2
+        fi
+        if ! command -v rust-analyzer >/dev/null 2>&1 || ! rust-analyzer --version >/dev/null 2>&1; then
+          echo "[launch-glm] WARNING: rust-analyzer is unavailable or its PATH shim is broken (install with: rustup component add rust-analyzer, or brew install rust-analyzer)." >&2
+        fi
+      fi
+      ;;
+  esac
+fi
 
 args=()
 if ! has_arg "--model" "$@"; then
@@ -221,12 +397,28 @@ fi
 if ! has_arg "--thinking" "$@" && [[ -n "$GLM_THINKING" ]]; then
   args+=(--thinking "$GLM_THINKING")
 fi
-if [[ "${GLM_AUTONOMY_PROMPT:-1}" != "0" && "${GLM_DISABLE_AUTONOMY_PROMPT:-0}" != "1" ]]; then
-  if ! has_arg "--append-system-prompt" "$@" && ! has_arg "--append-system-prompt-file" "$@" && [[ -f "$GLM_DEFAULT_AUTONOMY_PROMPT_FILE" ]]; then
+if ! has_arg "--append-system-prompt" "$@" && ! has_arg "--append-system-prompt-file" "$@"; then
+  if (( FEXOR_HARNESS_PROMPT_ENABLED )) && [[ -f "$FEXOR_CODING_PROMPT_FILE" ]]; then
+    if [[ "${FEXOR_AUTONOMY_PROMPT:-1}" != "0" && "${FEXOR_DISABLE_AUTONOMY_PROMPT:-0}" != "1" && "${GLM_AUTONOMY_PROMPT:-1}" != "0" && "${GLM_DISABLE_AUTONOMY_PROMPT:-0}" != "1" && -f "$GLM_DEFAULT_AUTONOMY_PROMPT_FILE" ]]; then
+      args+=(--append-system-prompt "$(<"$GLM_DEFAULT_AUTONOMY_PROMPT_FILE")
+
+$(<"$FEXOR_CODING_PROMPT_FILE")")
+    else
+      args+=(--append-system-prompt-file "$FEXOR_CODING_PROMPT_FILE")
+    fi
+  elif [[ "${FEXOR_AUTONOMY_PROMPT:-1}" != "0" && "${FEXOR_DISABLE_AUTONOMY_PROMPT:-0}" != "1" && "${GLM_AUTONOMY_PROMPT:-1}" != "0" && "${GLM_DISABLE_AUTONOMY_PROMPT:-0}" != "1" && -f "$GLM_DEFAULT_AUTONOMY_PROMPT_FILE" ]]; then
     args+=(--append-system-prompt-file "$GLM_DEFAULT_AUTONOMY_PROMPT_FILE")
   fi
 fi
-if ! has_arg "--setting-sources" "$@" && ! has_arg "--settings" "$@"; then
+if (( FEXOR_HARNESS_ENABLED )); then
+  if ! has_arg "--setting-sources" "$@" && ! has_arg "--settings" "$@" && (( FEXOR_HARNESS_LSP_ENABLED )); then
+    args+=(--setting-sources "" --settings "$FEXOR_LSP_SETTINGS_FILE")
+  elif ! has_arg "--setting-sources" "$@" && ! has_arg "--settings" "$@"; then
+    args+=(--setting-sources "")
+  fi
+elif ! has_arg "--setting-sources" "$@"; then
+  # Exact legacy behavior while the master switch is off: an explicit
+  # --settings argument did not suppress the empty setting-sources default.
   args+=(--setting-sources "")
 fi
 

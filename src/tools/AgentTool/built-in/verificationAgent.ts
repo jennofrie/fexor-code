@@ -1,11 +1,14 @@
-import { BASH_TOOL_NAME } from 'src/tools/BashTool/toolName.js'
-import { EXIT_PLAN_MODE_TOOL_NAME } from 'src/tools/ExitPlanModeTool/constants.js'
-import { FILE_EDIT_TOOL_NAME } from 'src/tools/FileEditTool/constants.js'
-import { FILE_WRITE_TOOL_NAME } from 'src/tools/FileWriteTool/prompt.js'
-import { NOTEBOOK_EDIT_TOOL_NAME } from 'src/tools/NotebookEditTool/constants.js'
-import { WEB_FETCH_TOOL_NAME } from 'src/tools/WebFetchTool/prompt.js'
-import { AGENT_TOOL_NAME } from '../constants.js'
-import type { BuiltInAgentDefinition } from '../loadAgentsDir.js'
+import { BASH_TOOL_NAME } from "src/tools/BashTool/toolName.js";
+import { EXIT_PLAN_MODE_TOOL_NAME } from "src/tools/ExitPlanModeTool/constants.js";
+import { FILE_EDIT_TOOL_NAME } from "src/tools/FileEditTool/constants.js";
+import { FILE_READ_TOOL_NAME } from "src/tools/FileReadTool/prompt.js";
+import { FILE_WRITE_TOOL_NAME } from "src/tools/FileWriteTool/prompt.js";
+import { GLOB_TOOL_NAME } from "src/tools/GlobTool/prompt.js";
+import { GREP_TOOL_NAME } from "src/tools/GrepTool/prompt.js";
+import { NOTEBOOK_EDIT_TOOL_NAME } from "src/tools/NotebookEditTool/constants.js";
+import { WEB_FETCH_TOOL_NAME } from "src/tools/WebFetchTool/prompt.js";
+import { AGENT_TOOL_NAME } from "../constants.js";
+import type { BuiltInAgentDefinition } from "../loadAgentsDir.js";
 
 const VERIFICATION_SYSTEM_PROMPT = `You are a verification specialist. Your job is not to confirm the implementation works — it's to try to break it.
 
@@ -126,15 +129,15 @@ PARTIAL is for environmental limitations only (no test framework, tool unavailab
 
 Use the literal string \`VERDICT: \` followed by exactly one of \`PASS\`, \`FAIL\`, \`PARTIAL\`. No markdown bold, no punctuation, no variation.
 - **FAIL**: include what failed, exact error output, reproduction steps.
-- **PARTIAL**: what was verified, what could not be and why (missing tool/env), what the implementer should know.`
+- **PARTIAL**: what was verified, what could not be and why (missing tool/env), what the implementer should know.`;
 
 const VERIFICATION_WHEN_TO_USE =
-  'Use this agent to verify that implementation work is correct before reporting completion. Invoke after non-trivial tasks (3+ file edits, backend/API changes, infrastructure changes). Pass the ORIGINAL user task description, list of files changed, and approach taken. The agent runs builds, tests, linters, and checks to produce a PASS/FAIL/PARTIAL verdict with evidence.'
+  "Use this agent to verify that implementation work is correct before reporting completion. Invoke after non-trivial tasks (3+ file edits, backend/API changes, infrastructure changes). Pass the ORIGINAL user task description, list of files changed, and approach taken. The agent runs builds, tests, linters, and checks to produce a PASS/FAIL/PARTIAL verdict with evidence.";
 
 export const VERIFICATION_AGENT: BuiltInAgentDefinition = {
-  agentType: 'verification',
+  agentType: "verification",
   whenToUse: VERIFICATION_WHEN_TO_USE,
-  color: 'red',
+  color: "red",
   background: true,
   disallowedTools: [
     AGENT_TOOL_NAME,
@@ -143,10 +146,37 @@ export const VERIFICATION_AGENT: BuiltInAgentDefinition = {
     FILE_WRITE_TOOL_NAME,
     NOTEBOOK_EDIT_TOOL_NAME,
   ],
-  source: 'built-in',
-  baseDir: 'built-in',
-  model: 'inherit',
+  source: "built-in",
+  baseDir: "built-in",
+  model: "inherit",
   getSystemPrompt: () => VERIFICATION_SYSTEM_PROMPT,
   criticalSystemReminder_EXPERIMENTAL:
-    'CRITICAL: This is a VERIFICATION-ONLY task. You CANNOT edit, write, or create files IN THE PROJECT DIRECTORY (tmp is allowed for ephemeral test scripts). You MUST end with VERDICT: PASS, VERDICT: FAIL, or VERDICT: PARTIAL.',
-}
+    "CRITICAL: This is a VERIFICATION-ONLY task. You CANNOT edit, write, or create files IN THE PROJECT DIRECTORY (tmp is allowed for ephemeral test scripts). You MUST end with VERDICT: PASS, VERDICT: FAIL, or VERDICT: PARTIAL.",
+};
+
+const TRUSTED_VERIFICATION_SYSTEM_PROMPT = VERIFICATION_SYSTEM_PROMPT.replace(
+  "Check your ACTUAL available tools rather than assuming from this prompt. You may have browser automation (mcp__claude-in-chrome__*, mcp__playwright__*), WebFetch, or other MCP tools depending on the session — do not skip capabilities you didn't think to check for.",
+  `Your tool surface is deliberately narrow: ${BASH_TOOL_NAME}, ${FILE_READ_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${GREP_TOOL_NAME}. Network access and inherited MCP tools are disabled. Use local executable checks and report environmental limits honestly.`
+)
+  .replace(
+    '**Frontend changes**: Start dev server → check your tools for browser automation (mcp__claude-in-chrome__*, mcp__playwright__*) and USE them to navigate, screenshot, click, and read console — do NOT say "needs a real browser" without attempting → curl a sample of page subresources (image-optimizer URLs like /_next/image, same-origin API routes, static assets) since HTML can serve 200 while everything it references fails → run frontend tests',
+    "**Frontend changes**: Start the dev server when local sandbox policy permits → exercise HTTP endpoints and static assets with local command-line clients → run frontend tests. If correctness requires unavailable browser automation, report PARTIAL rather than inventing evidence."
+  )
+  .replace(
+    '- "I don\'t have a browser" — did you actually check for mcp__claude-in-chrome__* / mcp__playwright__*? If present, use them. If an MCP tool fails, troubleshoot (server running? selector right?). The fallback exists so you don\'t invent your own "can\'t do this" story.',
+    '- "I do not have a browser" — if the task requires browser-only evidence and no browser tool exists in the trusted tool surface, run every available local check and report PARTIAL with the exact limitation.'
+  );
+
+export const TRUSTED_VERIFICATION_AGENT: BuiltInAgentDefinition = {
+  ...VERIFICATION_AGENT,
+  background: false,
+  tools: [BASH_TOOL_NAME, FILE_READ_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME],
+  disallowedTools: undefined,
+  mustCompleteBeforeParentContinues: true,
+  forceParentModel: true,
+  disableSubagentHooks: true,
+  disableInheritedMcp: true,
+  omitClaudeMd: true,
+  permissionMode: "bypassPermissions",
+  getSystemPrompt: () => TRUSTED_VERIFICATION_SYSTEM_PROMPT,
+};

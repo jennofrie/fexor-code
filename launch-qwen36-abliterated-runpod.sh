@@ -151,5 +151,8 @@ fi
 if [[ "${QWEN36_FEXOR_BARE_DEFAULT:-1}" == "1" ]] && ! has_arg "--bare" "$@"; then
   args+=(--bare)
 fi
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/fexor-append-autonomy.inc.sh"
+fexor_maybe_append_autonomy "$@"
 
 exec "$SCRIPT_DIR/cli-dev" "${args[@]}" "$@"

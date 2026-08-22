@@ -145,4 +145,20 @@ PY
 # like Qwen. Recording (SoX) works, but transcription is claude.ai-only —
 # use fexor-launch.sh / launch-claude-opus45.sh for voice.
 
-exec "$SCRIPT_DIR/cli-dev" "$@"
+has_arg() {
+  local needle="$1"
+  shift
+  for arg in "$@"; do
+    if [[ "$arg" == "$needle" || "$arg" == "$needle="* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+args=()
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/fexor-append-autonomy.inc.sh"
+fexor_maybe_append_autonomy "$@"
+
+exec "$SCRIPT_DIR/cli-dev" "${args[@]}" "$@"

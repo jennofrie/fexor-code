@@ -51,7 +51,8 @@ Launcher:
 
 Prompt addendum:
 
-- `prompts/glm-autonomy-system-prompt.md`
+- `prompts/autonomy-system-prompt.md` (shared across DeepSeek, NVIDIA, Grok, GPT, Qwen, GLM)
+- `prompts/glm-autonomy-system-prompt.md` (GLM launcher default; same policy text)
 
 Model/runtime support:
 
@@ -83,10 +84,17 @@ It loads the Z.AI key from `.env.glm`, shell env, or macOS Keychain services `gl
 - Thinking budget: `MAX_THINKING_TOKENS=16000`
 - Subagent model: `glm-4.5-air` by default via `CLAUDE_CODE_SUBAGENT_MODEL`
 - Rate-limit handling: `CLAUDE_CODE_UNATTENDED_RETRY=1`
-- Concurrent GLM sessions: blocked by default; set `GLM_ALLOW_CONCURRENT=1` only when intentionally running parallel GLM sessions.
+- Concurrent GLM sessions: up to three top-level instances by default. Run `./launch-glm.sh` in separate terminals; a fourth launch is rejected until one exits.
+
+The macOS launcher tracks its three process-owned slots under
+`~/.fexor-code-glm/.glm-launch-slots`. Slot claims are atomic, stale owners are
+reclaimed automatically, and sessions already running under the previous
+single-instance guard are adopted on the next launch. `GLM_ALLOW_CONCURRENT` is
+no longer required.
 
 The launcher appends `prompts/glm-autonomy-system-prompt.md` by default unless:
 
+- `FEXOR_AUTONOMY_PROMPT=0` or `FEXOR_DISABLE_AUTONOMY_PROMPT=1`
 - `GLM_AUTONOMY_PROMPT=0`
 - `GLM_DISABLE_AUTONOMY_PROMPT=1`
 - `--append-system-prompt` is supplied

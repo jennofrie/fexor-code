@@ -19,8 +19,6 @@ export CLAUDE_CONFIG_DIR="$HOME/.fexor-code"
 
 # ── Load API key (gitignored) ─────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DEFAULT_EFFORT="${DEEPSEEK_EFFORT:-max}"
-DEFAULT_THINKING="${DEEPSEEK_THINKING:-adaptive}"
 DEEPSEEK_PRO_MODEL="deepseek-v4-pro"
 DEEPSEEK_PRO_RELEASE="0813"
 # DeepSeek's hosted API keeps stable model IDs. As of 2026-08-13, the Pro alias
@@ -99,6 +97,37 @@ export ANTHROPIC_BASE_URL="https://api.deepseek.com/anthropic"
 DEFAULT_DEEPSEEK_MODEL="$(normalize_deepseek_model "${DEEPSEEK_MODEL:-$(default_deepseek_model)}")"
 SELECTED_DEEPSEEK_MODEL="$(selected_model "$DEFAULT_DEEPSEEK_MODEL" "$@")"
 
+# DeepSeek's Anthropic-compatible API accepts thinking enabled|disabled and
+# effort low|high|max. Claude's `adaptive` type is undocumented here and was
+# leaving Flash on Pro-class max CoT after /model switches.
+# Floor is `high` so Flash stays intelligent without the max-effort stall.
+normalize_deepseek_effort() {
+  local effort="${1:l}"
+  case "$effort" in
+    max|xhigh) echo "max" ;;
+    high|medium|low|none|off|"") echo "high" ;;
+    *) echo "high" ;;
+  esac
+}
+
+normalize_deepseek_thinking() {
+  local thinking="${1:l}"
+  case "$thinking" in
+    disabled|off|none) echo "disabled" ;;
+    enabled|on|adaptive|"") echo "enabled" ;;
+    *) echo "enabled" ;;
+  esac
+}
+
+if [[ -n "${DEEPSEEK_EFFORT:-}" ]]; then
+  DEFAULT_EFFORT="$(normalize_deepseek_effort "$DEEPSEEK_EFFORT")"
+elif [[ "$SELECTED_DEEPSEEK_MODEL" == "$DEEPSEEK_FLASH_MODEL" ]]; then
+  DEFAULT_EFFORT="high"
+else
+  DEFAULT_EFFORT="max"
+fi
+DEFAULT_THINKING="$(normalize_deepseek_thinking "${DEEPSEEK_THINKING:-enabled}")"
+
 # Pro remains the default flagship. Flash can be selected with --model,
 # DEEPSEEK_MODEL, or DEEPSEEK_VARIANT=flash. Keep Opus mapped to Pro so /model
 # can always jump back to the strongest DeepSeek tier, while Sonnet and subagents
@@ -111,20 +140,19 @@ export ANTHROPIC_DEFAULT_OPUS_MODEL_NAME="DeepSeek V4-Pro-${DEEPSEEK_PRO_RELEASE
 export ANTHROPIC_DEFAULT_SONNET_MODEL_NAME="$([[ "$SELECTED_DEEPSEEK_MODEL" == "$DEEPSEEK_FLASH_MODEL" ]] && echo "DeepSeek V4-Flash-${DEEPSEEK_FLASH_RELEASE}" || echo "DeepSeek V4-Pro-${DEEPSEEK_PRO_RELEASE}")"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME="DeepSeek V4-Flash-${DEEPSEEK_FLASH_RELEASE}"
 export ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION="DeepSeek V4-Pro-${DEEPSEEK_PRO_RELEASE} via official API alias - 1M context, 384K max output, max effort"
-export ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION="$([[ "$SELECTED_DEEPSEEK_MODEL" == "$DEEPSEEK_FLASH_MODEL" ]] && echo "DeepSeek V4-Flash-${DEEPSEEK_FLASH_RELEASE} via official API alias - 1M context, 384K max output, max effort" || echo "DeepSeek V4-Pro-${DEEPSEEK_PRO_RELEASE} via official API alias - 1M context, 384K max output, max effort")"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION="DeepSeek V4-Flash-${DEEPSEEK_FLASH_RELEASE} via official API alias - 1M context, 384K max output, max effort"
+export ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION="$([[ "$SELECTED_DEEPSEEK_MODEL" == "$DEEPSEEK_FLASH_MODEL" ]] && echo "DeepSeek V4-Flash-${DEEPSEEK_FLASH_RELEASE} via official API alias - 1M context, 384K max output, high effort" || echo "DeepSeek V4-Pro-${DEEPSEEK_PRO_RELEASE} via official API alias - 1M context, 384K max output, max effort")"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION="DeepSeek V4-Flash-${DEEPSEEK_FLASH_RELEASE} via official API alias - 1M context, 384K max output, high effort"
 export CLAUDE_CODE_SUBAGENT_MODEL="$(normalize_deepseek_model "${DEEPSEEK_SUBAGENT_MODEL:-$SELECTED_DEEPSEEK_MODEL}")"
 
 # ── Thinking ─────────────────────────────────────────────────────────────────
 # NOTE: DeepSeek is classified as a 'firstParty' provider (only ANTHROPIC_BASE_URL
-# is set), so ANTHROPIC_DEFAULT_*_MODEL_SUPPORTED_CAPABILITIES is INERT here. The
-# launcher injects --effort max and --thinking adaptive by default so fresh sessions
-# start at the highest configured reasoning mode without needing /effort max.
-export ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES="thinking,adaptive_thinking"
-export ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES="thinking,adaptive_thinking"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES="thinking,adaptive_thinking"
-# Fallback budget — only reaches the wire if adaptive thinking is disabled (it is a
-# no-op while adaptive is active). Set CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING=1 to use it.
+# is set), so ANTHROPIC_DEFAULT_*_MODEL_SUPPORTED_CAPABILITIES is INERT here.
+# Inject --thinking enabled (DeepSeek-valid) and effort max for Pro / high for Flash.
+export ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES="thinking,effort,max_effort"
+export ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES="thinking,effort,max_effort"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES="thinking,effort,max_effort"
+export CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING=1
+# Fallback budget — used because adaptive thinking is disabled for this provider.
 export MAX_THINKING_TOKENS=16000
 
 # ── Maximize the token window (DeepSeek V4 = native 1M context) ──────────────
@@ -169,8 +197,8 @@ options = [
     {
         "value": flash,
         "label": f"DeepSeek V4-Flash-{flash_release}",
-        "description": f"DeepSeek V4-Flash-{flash_release} via official API alias - 1M context, 384K max output, max effort",
-        "descriptionForModel": f"DeepSeek V4-Flash-{flash_release} via official API alias - 1M context, 384K max output, max effort",
+        "description": f"DeepSeek V4-Flash-{flash_release} via official API alias - 1M context, 384K max output, high effort",
+        "descriptionForModel": f"DeepSeek V4-Flash-{flash_release} via official API alias - 1M context, 384K max output, high effort",
     },
 ]
 
@@ -222,5 +250,8 @@ fi
 if ! has_arg "--thinking" "$@"; then
   args+=(--thinking "$DEFAULT_THINKING")
 fi
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/fexor-append-autonomy.inc.sh"
+fexor_maybe_append_autonomy "$@"
 
 exec "$SCRIPT_DIR/cli-dev" "${args[@]}" "${forwarded_args[@]}"
