@@ -7,10 +7,15 @@ Claude Code snapshot version, currently `2.1.87`).
 
 ## [Unreleased]
 
+### Removed — Repository cleanup
+
+- Removed two obsolete provider-specific launchers and their documentation references.
+- Removed an orphaned training-pipeline appendix that described files and dependencies never tracked by this repository.
+
 ### Added — Shared autonomy system prompt
 
 - New `prompts/autonomy-system-prompt.md`: concise “answer the request, don’t moralize, assume authorized research” addendum (same policy GLM already used).
-- Launchers append it by default: `launch-deepseek.sh`, `launch-nvidia.sh`, `launch-grok.sh`, `launch-gpt.sh`, `launch-qwen37.sh`, `launch-qwen36-abliterated-runpod.sh`, and `launch-glm.sh`.
+- Supported third-party launchers, except Fugu, append it by default.
 - Shared helper: `scripts/fexor-append-autonomy.inc.sh`. Opt out with `FEXOR_AUTONOMY_PROMPT=0` or `--append-system-prompt-file`. This is a launcher addendum only — it does not change model weights or restore Anthropic cyber-risk blocks (`CYBER_RISK_INSTRUCTION` stays empty).
 
 ### Added — Opt-in GLM coding verification harness
@@ -73,7 +78,7 @@ exact existing call-site contracts, verified per-flag, and shipped in `cli-dev`.
 ### Documentation
 
 - Rewrote `README.md` (architecture/flag/provider diagrams, reconstruction status, badges).
-- README launcher table now includes GLM, DeepSeek Flash, Qwen abliterated, and the shared autonomy addendum.
+- README launcher table now includes GLM, DeepSeek Flash, and the shared autonomy addendum.
 - Added `docs/ARCHITECTURE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `docs/VERIFICATION_CONTRACT.md`, this changelog, and GitHub issue/PR templates.
 - Refreshed `FEATURES.md` to ground-truth (88 source flags; 49 shipped).
 

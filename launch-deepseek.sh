@@ -219,7 +219,7 @@ PY
 # Not available on this provider. Speech-to-text uses Anthropic's claude.ai
 # voice_stream endpoint (OAuth-gated), so /voice is hidden for API-key providers
 # like DeepSeek. Recording (SoX) works, but transcription is claude.ai-only —
-# use fexor-launch.sh / launch-claude-opus45.sh for voice.
+# use fexor-launch.sh for voice.
 
 # Rewrite every explicit model argument to the normalized hosted-API model ID.
 # Without this, aliases such as `flash` and the release name

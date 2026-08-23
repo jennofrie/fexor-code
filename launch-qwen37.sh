@@ -143,7 +143,7 @@ PY
 # Not available on this provider. Speech-to-text uses Anthropic's claude.ai
 # voice_stream endpoint (OAuth-gated), so /voice is hidden for API-key providers
 # like Qwen. Recording (SoX) works, but transcription is claude.ai-only —
-# use fexor-launch.sh / launch-claude-opus45.sh for voice.
+# use fexor-launch.sh for voice.
 
 has_arg() {
   local needle="$1"
