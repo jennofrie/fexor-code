@@ -7,6 +7,12 @@ Claude Code snapshot version, currently `2.1.87`).
 
 ## [Unreleased]
 
+### Changed — Security policy
+
+- Documented supply-chain hygiene (`bun install --frozen-lockfile`, lockfile review,
+  no unsigned vendored binaries) and the Linux NVIDIA keyfile `0600` / non-symlink
+  requirement in `SECURITY.md`.
+
 ### Removed — Repository cleanup
 
 - Removed two obsolete provider-specific launchers and their documentation references.
