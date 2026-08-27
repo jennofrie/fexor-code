@@ -30,8 +30,18 @@ applies to the repository:
 - `.env`, `.env.*`, and key files are git-ignored. **Never commit credentials.**
 - Provider launchers read API keys from `.env.<provider>` files or the macOS
   Keychain — both kept out of version control.
+- On Linux, the NVIDIA launcher requires `~/.config/fexor-code/nvidia_api_key` to
+  be a regular (non-symlink) file mode `0600`; refuse looser permissions.
 - If a secret is ever committed, treat it as compromised: rotate it immediately,
   then scrub history. Do not rely on a later deletion commit alone.
+
+## Supply-chain hygiene
+
+- Install with `bun install --frozen-lockfile` so `bun.lock` is the source of truth.
+- Prefer reviewing lockfile diffs in PRs the same way you review source changes.
+- Do not vend unsigned third-party binaries into `scripts/` or `assets/`.
+- Treat MCP servers and auto-approval modes as part of the trust boundary — only
+  enable ones you have reviewed.
 
 ## Safe-use note
 
