@@ -195,7 +195,9 @@ export function getModelMaxOutputTokens(model: string): {
 
   const m = getCanonicalName(model);
 
-  if (m.includes("deepseek-v4")) {
+  // Match both the version-prefixed IDs (deepseek-v4-pro) and the version-less
+  // Flash ID (deepseek-flash) served by the official DeepSeek endpoint.
+  if (m.includes("deepseek-v4") || m.includes("deepseek-flash")) {
     // DeepSeek V4 Pro-0813 and Flash-0731 support up to 384K output. Keep the
     // default at 64K to avoid reserving an excessive generation window for
     // ordinary coding turns; launchers can opt in through the env override.

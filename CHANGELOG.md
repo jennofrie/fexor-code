@@ -7,6 +7,20 @@ Claude Code snapshot version, currently `2.1.87`).
 
 ## [Unreleased]
 
+### Changed — DeepSeek launchers: V4.1 Flash and V4 Pro (live IDs, max effort)
+
+- Live IDs only: default `deepseek-flash[1m]` (V4.1 Flash) and `deepseek-v4-pro[1m]` via `--model deepseek-v4-pro` / `DEEPSEEK_VARIANT=pro`. Haiku/subagents stay `deepseek-flash`.
+- Dropped retired `deepseek-v4-flash` / dated V4-Pro-0813 fallbacks and the V4.1 launch probe.
+- Both families default to effort `max`. Official Claude Code slot mapping: compact window `786432`, client 1M budget, `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`, `CLAUDE_CODE_AUTO_MODE_SERVER=0`.
+- `src/utils/effort.ts` and `src/utils/context.ts` treat `deepseek-flash` the same as `deepseek-v4*` for max-effort and 384K output caps.
+
+### Changed — Sakana Fugu launcher (Anthropic-native v1.1)
+
+- `launch-fugu.sh` now uses Sakana Fugu Ultra v1.1's Anthropic-compatible endpoint (`ANTHROPIC_BASE_URL=https://api.sakana.ai`, real bearer key, `[1m]` model slots) instead of the OpenAI-Responses fork adapter.
+- Removed `CLAUDE_CODE_USE_SAKANA_FUGU` fork flag and the `fugu-provider-auth-disabled` sentinel token from the launcher; experimental betas stay enabled (`[1m]` needs the context-1m beta).
+- Effort is `high` via `CLAUDE_CODE_EFFORT_LEVEL` (Fugu rejects `low`/`medium`; `max` only on ultra v1.1).
+- The in-tree Sakana branch of `codex-fetch-adapter.ts` is retained as the legacy pre-v1.1 Responses route, no longer driven by default launchers. Windows `launch-fugu.ps1` mirrors the mac route.
+
 ### Changed — Security policy
 
 - Documented supply-chain hygiene (`bun install --frozen-lockfile`, lockfile review,

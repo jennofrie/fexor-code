@@ -85,7 +85,12 @@ export function modelSupportsMaxEffort(model: string): boolean {
   if (isGlmMaxEffortModel(model)) {
     return true;
   }
-  if (model.toLowerCase().startsWith("deepseek-v4")) {
+  // DeepSeek exposes a version-prefixed Pro ID (deepseek-v4-pro) and a
+  // version-less Flash ID (deepseek-flash); both accept reasoning_effort: max.
+  if (
+    model.toLowerCase().startsWith("deepseek-v4") ||
+    model.toLowerCase().startsWith("deepseek-flash")
+  ) {
     return true;
   }
   if (

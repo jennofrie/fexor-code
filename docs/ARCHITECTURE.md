@@ -108,10 +108,13 @@ V4-Flash, and MiniMax M3 are capped at 16,384. The two DeepSeek profiles send
 `reasoning_effort=max`; MiniMax M3 sends
 `chat_template_kwargs.thinking_mode=adaptive`, its strongest automatic mode.
 
-The direct DeepSeek launcher uses the stable hosted model ID
-`deepseek-v4-pro`, which resolves to DeepSeek V4-Pro-0813 as of 2026-08-13.
-It reserves 64K output tokens by default and permits an explicit 384K maximum
-through `DEEPSEEK_MAX_OUTPUT_TOKENS=384000`.
+The direct DeepSeek launcher uses the two live hosted IDs only:
+`deepseek-flash[1m]` (V4.1 Flash, default) and `deepseek-v4-pro[1m]` (current
+Pro). Haiku/subagents are `deepseek-flash`. Both default to effort `max`.
+Compact window is 786432. Client-side 1M budgeting still uses
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000` because this snapshot does not know
+DeepSeek in the native-1M table. Default output is 64K, with an explicit 384K
+maximum through `DEEPSEEK_MAX_OUTPUT_TOKENS=384000`.
 
 ### Third-party fidelity
 

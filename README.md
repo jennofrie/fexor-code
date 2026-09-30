@@ -141,7 +141,7 @@ Full audit of all 88 flags → **[FEATURES.md](FEATURES.md)**.
 
 ## 🌐 Model providers
 
-`fexor-code` speaks the Anthropic Messages format internally and routes it to multiple backends. Third-party Anthropic-compatible endpoints pass through natively; OpenAI/Codex, Sakana, and NVIDIA use protocol translation adapters.
+`fexor-code` speaks the Anthropic Messages format internally and routes it to multiple backends. Third-party Anthropic-compatible endpoints pass through natively; OpenAI/Codex and NVIDIA use protocol translation adapters. Sakana Fugu used the Responses adapter until v1.1 (2026-07-24) and now passes through natively via its Anthropic-compatible endpoint.
 
 ```mermaid
 flowchart LR
@@ -151,10 +151,10 @@ flowchart LR
     APP --> BR["AWS Bedrock"]
     APP --> VX["Google Vertex AI"]
     APP --> FD["Anthropic Foundry"]
-    APP --> DS["DeepSeek V4-Pro-0813<br/><sub>api.deepseek.com/anthropic · 1M</sub>"]
+    APP --> DS["DeepSeek V4.1 Flash<br/><sub>deepseek-flash · api.deepseek.com/anthropic · 1M</sub>"]
     APP --> QW["Qwen 3.7-Max<br/><sub>Alibaba Model Studio · 1M</sub>"]
     APP --> GROK["xAI Grok<br/><sub>Anthropic-compatible Messages</sub>"]
-    APP --> SK["Sakana Fugu<br/><sub>OpenAI Responses</sub>"]
+    APP --> SK["Sakana Fugu<br/><sub>Anthropic Messages v1.1</sub>"]
     APP --> NV["NVIDIA NIM<br/><sub>GLM-5.2 · DeepSeek V4 · MiniMax M3 · 1M</sub>"]
 
     style APP fill:#1e1b4b,stroke:#8b5cf6,color:#fff
@@ -169,10 +169,10 @@ Each provider has a dedicated, **tuned** launcher that maximizes its context win
 | `fexor-launch.sh`                     | Claude Opus 4.8 `[1m]`                     |         **1M** | native subscription, adaptive thinking, 128K output                                             |
 | `launch-gpt.sh`                       | GPT-5.5 (or 5.4)                           |     400K–1.05M | Codex adapter, `xhigh` reasoning, verbosity `medium`                                            |
 | `launch-grok.sh`                      | Grok 4.5                                   |       **500K** | xAI OAuth (`~/.grok/auth.json`) or `XAI_API_KEY`, Anthropic-compatible Messages                 |
-| `launch-fugu.sh`                      | Sakana Fugu                                |         **1M** | OpenAI Responses adapter, isolated API-key config, Fugu-specific harness prompt                 |
+| `launch-fugu.sh`                      | Sakana Fugu                                |         **1M** | **Anthropic-native Messages v1.1** (since 2026-07-24): real bearer key, `[1m]` slots, 2h timeout, Fugu-specific harness prompt |
 | `launch-nvidia.sh`                    | GLM-5.2, DeepSeek V4-Pro/Flash, MiniMax M3 |         **1M** | NVIDIA free hosted NIM; model profiles, Keychain-backed API key, Chat Completions adapter       |
 | `launch-glm.sh`                       | GLM 5.2 `[1m]` (5.3 selectable)            |         **1M** | Z.AI Anthropic-compatible API, max effort, autonomy addendum                                    |
-| `launch-deepseek.sh`                  | DeepSeek V4-Pro / Flash                    |         **1M** | Pro default (max effort); Flash via `--model deepseek-v4-flash` (high floor); 64K / 384K output |
+| `launch-deepseek.sh`                  | DeepSeek V4.1 Flash / V4 Pro               |         **1M** | Live IDs only: `deepseek-flash[1m]` (default) or `deepseek-v4-pro[1m]` (`--model deepseek-v4-pro`). Both effort **max**. Haiku/subagents = `deepseek-flash`. Compact 786432. 64K default / 384K max output |
 | `launch-qwen37.sh`                    | Qwen 3.7-Max                               |         **1M** | beta-strip, prompt caching preserved                                                            |
 
 Third-party launchers (DeepSeek, NVIDIA, Grok, GPT, Qwen, GLM) append `prompts/autonomy-system-prompt.md` by default — a short “don’t moralize, assume authorized research” addendum. This does **not** uncensored the model weights. Disable with `FEXOR_AUTONOMY_PROMPT=0`. GLM’s copy lives at `prompts/glm-autonomy-system-prompt.md`. Fugu keeps its own prompt. Anthropic OAuth launchers do not append it.
@@ -209,15 +209,15 @@ regular, non-symlinked file with `0600` permissions.
 <details>
 <summary><b>Context windows at a glance</b></summary>
 
-| Model                  |                Context | Max output | Notes                                                       |
-| ---------------------- | ---------------------: | ---------: | ----------------------------------------------------------- |
-| Claude Sonnet 5        |              1,000,000 |    128,000 | native default, no `[1m]` required                          |
-| Claude Opus 4.8 `[1m]` |              1,000,000 |    128,000 | native 1M                                                   |
-| GPT-5.4                |              1,050,000 |    128,000 | xhigh reasoning                                             |
-| GPT-5.5                | 1,000,000 (400K Codex) |          — | strongest long-context                                      |
-| DeepSeek V4-Pro-0813   |              1,000,000 |    384,000 | hosted as `deepseek-v4-pro`; reasoning consumes context     |
-| DeepSeek V4-Flash-0731 |              1,000,000 |    384,000 | `--model deepseek-v4-flash`; launcher effort floor **high** |
-| Qwen 3.7-Max           |              1,000,000 |     65,536 | agent-tuned, verbose                                        |
+| Model                  |                Context | Max output | Notes                                                                               |
+| ---------------------- | ---------------------: | ---------: | ----------------------------------------------------------------------------------- |
+| Claude Sonnet 5        |              1,000,000 |    128,000 | native default, no `[1m]` required                                                  |
+| Claude Opus 4.8 `[1m]` |              1,000,000 |    128,000 | native 1M                                                                           |
+| GPT-5.4                |              1,050,000 |    128,000 | xhigh reasoning                                                                     |
+| GPT-5.5                | 1,000,000 (400K Codex) |          — | strongest long-context                                                              |
+| DeepSeek V4.1 Flash    |              1,000,000 |    384,000 | `deepseek-flash[1m]` (GA 2026-09-10, native multimodal); compact 786432; effort max |
+| DeepSeek V4 Pro        |              1,000,000 |    384,000 | live ID `deepseek-v4-pro[1m]` (no published v4.1-pro ID); effort max                |
+| Qwen 3.7-Max           |              1,000,000 |     65,536 | agent-tuned, verbose                                                                |
 
 </details>
 
@@ -256,8 +256,8 @@ bun run build:dev:full   # → ./cli-dev (all experimental flags)
 ./cli -p "what files are here?"    # one-shot
 ./cli --model claude-opus-4-8      # specify model
 ./launch-gpt.sh                    # GPT-5.5 via Codex
-./launch-deepseek.sh               # DeepSeek V4-Pro (1M, max effort)
-./launch-deepseek.sh --model deepseek-v4-flash   # Flash, effort high
+./launch-deepseek.sh                          # DeepSeek V4.1 Flash 1M (deepseek-flash[1m], effort max)
+./launch-deepseek.sh --model deepseek-v4-pro  # DeepSeek V4 Pro 1M (effort max)
 FEXOR_AUTONOMY_PROMPT=0 ./launch-deepseek.sh     # skip autonomy addendum
 ./launch-glm.sh                    # GLM 5.2, autonomy addendum on
 ./cli ps                           # list background sessions (BG_SESSIONS)

@@ -1,32 +1,38 @@
 #!/bin/zsh
-# fexor-code isolated launcher — powered by DeepSeek V4-Pro-0813/Flash-0731
-# Runs fexor-code with its own config directory, completely separate from
-# the official Claude Code CLI (~/.claude/).
+# fexor-code isolated launcher — DeepSeek V4.1 Flash / V4 Pro, effort max
+# https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code
+#
+# Live API IDs (verified 2026-09-23): deepseek-flash, deepseek-v4-pro.
+# Retired names (deepseek-v4-flash, deepseek-v4-flash-vision-exp) are not used.
+# There is no published deepseek-v4.1-pro ID; Pro is deepseek-v4-pro.
+#
+# Default (official Claude Code mapping):
+#   main/opus/sonnet = deepseek-flash[1m]
+#   haiku/subagents  = deepseek-flash
+#   effort           = max
+#   compact window   = 786432
+#
+# Isolated from official Claude Code (~/.claude) and ~/Desktop/claude.
 #
 # Usage:
-#   ./launch-deepseek.sh                          # interactive REPL
-#   ./launch-deepseek.sh -p "explain this repo"   # one-shot
-#   ./launch-deepseek.sh --model deepseek-v4-pro-0813 # latest Pro (hosted alias)
-#   ./launch-deepseek.sh --model deepseek-v4-flash-0731 # specify Flash-0731
-#   DEEPSEEK_MAX_OUTPUT_TOKENS=384000 ./launch-deepseek.sh # opt into 384K output
-#   DEEPSEEK_VARIANT=flash ./launch-deepseek.sh     # default to Flash
-#   DEEPSEEK_MODEL=deepseek-v4-flash-0731 ./launch-deepseek.sh
+#   ./launch-deepseek.sh                          # V4.1 Flash 1M, effort max
+#   ./launch-deepseek.sh --model deepseek-v4-pro  # V4 Pro 1M, effort max
+#   ./launch-deepseek.sh -p "explain this repo"
+#   DEEPSEEK_VARIANT=pro ./launch-deepseek.sh
+#   DEEPSEEK_MAX_OUTPUT_TOKENS=384000 ./launch-deepseek.sh
 #
 # To add a shell alias:
 #   echo 'alias fexor-deepseek="~/Desktop/Github/fexor-code-main/launch-deepseek.sh"' >> ~/.zshrc
 
 export CLAUDE_CONFIG_DIR="$HOME/.fexor-code"
-
-# ── Load API key (gitignored) ─────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DEEPSEEK_PRO_MODEL="deepseek-v4-pro"
-DEEPSEEK_PRO_RELEASE="0813"
-# DeepSeek's hosted API keeps stable model IDs. As of 2026-08-13, the Pro alias
-# resolves to DeepSeek-V4-Pro-0813; as of 2026-07-31, the Flash alias resolves
-# to DeepSeek-V4-Flash-0731. Dated names are checkpoint labels and are normalized
-# below because the official hosted API only accepts the stable IDs.
-DEEPSEEK_FLASH_MODEL="deepseek-v4-flash"
-DEEPSEEK_FLASH_RELEASE="0731"
+
+DEEPSEEK_FLASH_MAIN="deepseek-flash[1m]"
+DEEPSEEK_FLASH_BARE="deepseek-flash"
+DEEPSEEK_FLASH_NAME="DeepSeek V4.1 Flash"
+DEEPSEEK_PRO_MAIN="deepseek-v4-pro[1m]"
+DEEPSEEK_PRO_BARE="deepseek-v4-pro"
+DEEPSEEK_PRO_NAME="DeepSeek V4 Pro"
 
 has_arg() {
   local needle="$1"
@@ -39,74 +45,26 @@ has_arg() {
   return 1
 }
 
-normalize_deepseek_model() {
-  local model="${1:l}"
-  case "$model" in
-    pro|v4-pro|deepseek-pro|pro-0813|v4-pro-0813|deepseek-pro-0813|deepseek-v4-pro-0813)
-      echo "$DEEPSEEK_PRO_MODEL"
-      ;;
-    flash|v4-flash|deepseek-flash|flash-0731|v4-flash-0731|deepseek-flash-0731|deepseek-v4-flash-0731)
-      echo "$DEEPSEEK_FLASH_MODEL"
-      ;;
-    *)
-      echo "$1"
-      ;;
-  esac
-}
-
-default_deepseek_model() {
-  case "${DEEPSEEK_VARIANT:l}" in
-    flash|v4-flash|flash-0731|v4-flash-0731|deepseek-v4-flash-0731)
-      echo "$DEEPSEEK_FLASH_MODEL"
-      ;;
-    pro|v4-pro|pro-0813|v4-pro-0813|deepseek-v4-pro-0813|"")
-      echo "$DEEPSEEK_PRO_MODEL"
-      ;;
-    *)
-      echo "[launch-deepseek] ERROR: DEEPSEEK_VARIANT must be 'pro', 'pro-0813', 'flash', or 'flash-0731'." >&2
-      exit 1
-      ;;
-  esac
-}
-
-selected_model() {
-  local model="$1"
-  shift
+# flash | pro. Wire IDs only: deepseek-flash and deepseek-v4-pro.
+selected_family() {
+  local raw="${DEEPSEEK_MODEL:-${DEEPSEEK_VARIANT:-flash}}"
   local i=1
   while (( i <= $# )); do
     local arg="${@[$i]}"
     if [[ "$arg" == "--model="* ]]; then
-      model="${arg#--model=}"
+      raw="${arg#--model=}"
     elif [[ "$arg" == "--model" && $i -lt $# ]]; then
-      model="${@[$((i + 1))]}"
+      raw="${@[$((i + 1))]}"
     fi
     (( i++ ))
   done
-  normalize_deepseek_model "$model"
-}
-
-if [[ -f "$SCRIPT_DIR/.env.deepseek" ]]; then
-  source "$SCRIPT_DIR/.env.deepseek"
-fi
-# Hard override — ensures any stale stored key in ~/.fexor-code/ cannot win
-export ANTHROPIC_AUTH_TOKEN
-
-# ── DeepSeek V4 — Anthropic-compatible endpoint ───────────────────────────────
-export ANTHROPIC_BASE_URL="https://api.deepseek.com/anthropic"
-
-DEFAULT_DEEPSEEK_MODEL="$(normalize_deepseek_model "${DEEPSEEK_MODEL:-$(default_deepseek_model)}")"
-SELECTED_DEEPSEEK_MODEL="$(selected_model "$DEFAULT_DEEPSEEK_MODEL" "$@")"
-
-# DeepSeek's Anthropic-compatible API accepts thinking enabled|disabled and
-# effort low|high|max. Claude's `adaptive` type is undocumented here and was
-# leaving Flash on Pro-class max CoT after /model switches.
-# Floor is `high` so Flash stays intelligent without the max-effort stall.
-normalize_deepseek_effort() {
-  local effort="${1:l}"
-  case "$effort" in
-    max|xhigh) echo "max" ;;
-    high|medium|low|none|off|"") echo "high" ;;
-    *) echo "high" ;;
+  case "${raw:l}" in
+    pro|deepseek-pro|deepseek-v4-pro|deepseek-v4-pro\[1m\]|v4-pro|v4.1-pro|v41-pro|deepseek-v4.1-pro|deepseek-v41-pro)
+      echo pro
+      ;;
+    *)
+      echo flash
+      ;;
   esac
 }
 
@@ -114,125 +72,104 @@ normalize_deepseek_thinking() {
   local thinking="${1:l}"
   case "$thinking" in
     disabled|off|none) echo "disabled" ;;
-    enabled|on|adaptive|"") echo "enabled" ;;
     *) echo "enabled" ;;
   esac
 }
 
-if [[ -n "${DEEPSEEK_EFFORT:-}" ]]; then
-  DEFAULT_EFFORT="$(normalize_deepseek_effort "$DEEPSEEK_EFFORT")"
-elif [[ "$SELECTED_DEEPSEEK_MODEL" == "$DEEPSEEK_FLASH_MODEL" ]]; then
-  DEFAULT_EFFORT="high"
+if [[ -f "$SCRIPT_DIR/.env.deepseek" ]]; then
+  source "$SCRIPT_DIR/.env.deepseek"
+fi
+export ANTHROPIC_AUTH_TOKEN
+export ANTHROPIC_BASE_URL="https://api.deepseek.com/anthropic"
+
+FAMILY="$(selected_family "$@")"
+if [[ "$FAMILY" == pro ]]; then
+  SELECTED_MAIN="$DEEPSEEK_PRO_MAIN"
+  SELECTED_NAME="$DEEPSEEK_PRO_NAME"
 else
-  DEFAULT_EFFORT="max"
+  SELECTED_MAIN="$DEEPSEEK_FLASH_MAIN"
+  SELECTED_NAME="$DEEPSEEK_FLASH_NAME"
 fi
 DEFAULT_THINKING="$(normalize_deepseek_thinking "${DEEPSEEK_THINKING:-enabled}")"
+case "${DEEPSEEK_EFFORT:l}" in
+  high|medium|low) DEFAULT_EFFORT="${DEEPSEEK_EFFORT:l}" ;;
+  *) DEFAULT_EFFORT="max" ;;
+esac
 
-# Pro remains the default flagship. Flash can be selected with --model,
-# DEEPSEEK_MODEL, or DEEPSEEK_VARIANT=flash. Keep Opus mapped to Pro so /model
-# can always jump back to the strongest DeepSeek tier, while Sonnet and subagents
-# follow the selected launcher model.
-export ANTHROPIC_MODEL="$SELECTED_DEEPSEEK_MODEL"
-export ANTHROPIC_DEFAULT_OPUS_MODEL="$DEEPSEEK_PRO_MODEL"
-export ANTHROPIC_DEFAULT_SONNET_MODEL="$SELECTED_DEEPSEEK_MODEL"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="$DEEPSEEK_FLASH_MODEL"
-export ANTHROPIC_DEFAULT_OPUS_MODEL_NAME="DeepSeek V4-Pro-${DEEPSEEK_PRO_RELEASE}"
-export ANTHROPIC_DEFAULT_SONNET_MODEL_NAME="$([[ "$SELECTED_DEEPSEEK_MODEL" == "$DEEPSEEK_FLASH_MODEL" ]] && echo "DeepSeek V4-Flash-${DEEPSEEK_FLASH_RELEASE}" || echo "DeepSeek V4-Pro-${DEEPSEEK_PRO_RELEASE}")"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME="DeepSeek V4-Flash-${DEEPSEEK_FLASH_RELEASE}"
-export ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION="DeepSeek V4-Pro-${DEEPSEEK_PRO_RELEASE} via official API alias - 1M context, 384K max output, max effort"
-export ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION="$([[ "$SELECTED_DEEPSEEK_MODEL" == "$DEEPSEEK_FLASH_MODEL" ]] && echo "DeepSeek V4-Flash-${DEEPSEEK_FLASH_RELEASE} via official API alias - 1M context, 384K max output, high effort" || echo "DeepSeek V4-Pro-${DEEPSEEK_PRO_RELEASE} via official API alias - 1M context, 384K max output, max effort")"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION="DeepSeek V4-Flash-${DEEPSEEK_FLASH_RELEASE} via official API alias - 1M context, 384K max output, high effort"
-export CLAUDE_CODE_SUBAGENT_MODEL="$(normalize_deepseek_model "${DEEPSEEK_SUBAGENT_MODEL:-$SELECTED_DEEPSEEK_MODEL}")"
+export ANTHROPIC_MODEL="$SELECTED_MAIN"
+# DeepSeek's documented Claude Code mapping points the Opus tier at Flash.
+# Pinning it to Pro billed Flash-quality output at V4 Pro rates (and since
+# 2026-09-14 deepseek-v4-pro requests route to V4.1 Flash anyway). Pro stays
+# reachable via --model pro / DEEPSEEK_VARIANT=pro and the /model picker.
+export ANTHROPIC_DEFAULT_OPUS_MODEL="$SELECTED_MAIN"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="$SELECTED_MAIN"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="$DEEPSEEK_FLASH_BARE"
+export ANTHROPIC_DEFAULT_OPUS_MODEL_NAME="$SELECTED_NAME"
+export ANTHROPIC_DEFAULT_SONNET_MODEL_NAME="$SELECTED_NAME"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME="$DEEPSEEK_FLASH_NAME"
+export ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION="$SELECTED_NAME via official API - 1M context, max effort"
+export ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION="$SELECTED_NAME via official API - 1M context, max effort"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION="$DEEPSEEK_FLASH_NAME via official API - 1M context, max effort"
+export CLAUDE_CODE_SUBAGENT_MODEL="${DEEPSEEK_SUBAGENT_MODEL:-$DEEPSEEK_FLASH_BARE}"
 
-# ── Thinking ─────────────────────────────────────────────────────────────────
-# NOTE: DeepSeek is classified as a 'firstParty' provider (only ANTHROPIC_BASE_URL
-# is set), so ANTHROPIC_DEFAULT_*_MODEL_SUPPORTED_CAPABILITIES is INERT here.
-# Inject --thinking enabled (DeepSeek-valid) and effort max for Pro / high for Flash.
 export ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES="thinking,effort,max_effort"
 export ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES="thinking,effort,max_effort"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES="thinking,effort,max_effort"
 export CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING=1
-# Fallback budget — used because adaptive thinking is disabled for this provider.
 export MAX_THINKING_TOKENS=16000
 
-# ── Maximize the token window (DeepSeek V4 = native 1M context) ──────────────
-# Without this, fexor-code budgets an unknown model at only 200K and auto-compacts
-# ~5x too early. CLAUDE_CODE_MAX_CONTEXT_TOKENS is a client-side budgeting value
-# (never sent to the API) and is honored in external builds after the un-gate patch.
 export CLAUDE_CODE_MAX_CONTEXT_TOKENS="${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-1000000}"
-# Keep a practical 64K request default while allowing DeepSeek's documented
-# 384K maximum when a task genuinely needs one very large response.
+export CLAUDE_CODE_AUTO_COMPACT_WINDOW="${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-786432}"
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS="${CLAUDE_CODE_MAX_OUTPUT_TOKENS:-${DEEPSEEK_MAX_OUTPUT_TOKENS:-64000}}"
-
-# ── 3rd-party fidelity: strip Anthropic-only betas + experimental tool fields ─
-# DeepSeek's Anthropic-compatible endpoint implements core Messages only. This
-# suppresses prompt-caching-scope/context-management/redact-thinking betas AND strips
-# strict/defer_loading/eager_input_streaming from tool schemas (prevents "Extra inputs
-# are not permitted" 400s) — the single biggest tool-reliability fix. Base prompt
-# caching (cache_control) is preserved.
+export API_TIMEOUT_MS="${API_TIMEOUT_MS:-3000000}"
+export CLAUDE_CODE_AUTO_MODE_SERVER="${CLAUDE_CODE_AUTO_MODE_SERVER:-0}"
 export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1
-# interleaved-thinking-2025-05-14 is granted by the firstParty heuristic and is not
-# stripped by the line above; DeepSeek doesn't implement it, so suppress the header.
 export DISABLE_INTERLEAVED_THINKING=1
-
-# ── Stability: disable Anthropic telemetry & non-streaming fallback ──────────
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
 export CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1
 
-# Lock /model picker to the official DeepSeek V4 tiers in this isolated config.
-python3 - "$CLAUDE_CONFIG_DIR" "$DEEPSEEK_PRO_MODEL" "$DEEPSEEK_PRO_RELEASE" "$DEEPSEEK_FLASH_MODEL" "$DEEPSEEK_FLASH_RELEASE" <<'PY' 2>/dev/null || true
+python3 - "$CLAUDE_CONFIG_DIR" "$DEEPSEEK_FLASH_MAIN" "$DEEPSEEK_FLASH_NAME" "$DEEPSEEK_PRO_MAIN" "$DEEPSEEK_PRO_NAME" <<'PY' 2>/dev/null || true
 import json, pathlib, sys
 base = pathlib.Path(sys.argv[1]); base.mkdir(parents=True, exist_ok=True)
-pro = sys.argv[2]
-pro_release = sys.argv[3]
-flash = sys.argv[4]
-flash_release = sys.argv[5]
+flash, flash_name, pro, pro_name = sys.argv[2:6]
 options = [
     {
-        "value": pro,
-        "label": f"DeepSeek V4-Pro-{pro_release}",
-        "description": f"DeepSeek V4-Pro-{pro_release} via official API alias - 1M context, 384K max output, max effort",
-        "descriptionForModel": f"DeepSeek V4-Pro-{pro_release} via official API alias - 1M context, 384K max output, max effort",
+        "value": flash,
+        "label": flash_name,
+        "description": f"{flash_name} via official API - 1M context, max effort",
+        "descriptionForModel": f"{flash_name} via official API - 1M context, max effort",
     },
     {
-        "value": flash,
-        "label": f"DeepSeek V4-Flash-{flash_release}",
-        "description": f"DeepSeek V4-Flash-{flash_release} via official API alias - 1M context, 384K max output, high effort",
-        "descriptionForModel": f"DeepSeek V4-Flash-{flash_release} via official API alias - 1M context, 384K max output, high effort",
+        "value": pro,
+        "label": pro_name,
+        "description": f"{pro_name} via official API - 1M context, max effort",
+        "descriptionForModel": f"{pro_name} via official API - 1M context, max effort",
     },
 ]
-
 cj = base / ".claude.json"
-try: d = json.loads(cj.read_text())
-except Exception: d = {}
+try:
+    d = json.loads(cj.read_text())
+except Exception:
+    d = {}
 d["additionalModelOptionsCache"] = options
 cj.write_text(json.dumps(d, indent=2))
-
 sj = base / "settings.json"
-try: s = json.loads(sj.read_text())
-except Exception: s = {}
-s["availableModels"] = [pro, flash]
+try:
+    s = json.loads(sj.read_text())
+except Exception:
+    s = {}
+s["availableModels"] = [flash, pro]
 sj.write_text(json.dumps(s, indent=2))
 PY
 
-# ── Voice (/voice) ───────────────────────────────────────────────────────────
-# Not available on this provider. Speech-to-text uses Anthropic's claude.ai
-# voice_stream endpoint (OAuth-gated), so /voice is hidden for API-key providers
-# like DeepSeek. Recording (SoX) works, but transcription is claude.ai-only —
-# use fexor-launch.sh for voice.
-
-# Rewrite every explicit model argument to the normalized hosted-API model ID.
-# Without this, aliases such as `flash` and the release name
-# `deepseek-v4-pro-0813` are selected internally but the original value still
-# reaches cli-dev and is rejected by DeepSeek's hosted endpoint.
 forwarded_args=()
 i=1
 while (( i <= $# )); do
   arg="${@[$i]}"
   if [[ "$arg" == "--model="* ]]; then
-    forwarded_args+=("--model=$SELECTED_DEEPSEEK_MODEL")
+    forwarded_args+=("--model=$SELECTED_MAIN")
   elif [[ "$arg" == "--model" && $i -lt $# ]]; then
-    forwarded_args+=(--model "$SELECTED_DEEPSEEK_MODEL")
+    forwarded_args+=(--model "$SELECTED_MAIN")
     (( i++ ))
   else
     forwarded_args+=("$arg")
@@ -242,10 +179,11 @@ done
 
 args=()
 if ! has_arg "--model" "$@"; then
-  args+=(--model "$SELECTED_DEEPSEEK_MODEL")
+  args+=(--model "$SELECTED_MAIN")
 fi
-if ! has_arg "--effort" "$@" && [[ -z "$CLAUDE_CODE_EFFORT_LEVEL" ]]; then
-  args+=(--effort "$DEFAULT_EFFORT")
+export CLAUDE_CODE_EFFORT_LEVEL="${CLAUDE_CODE_EFFORT_LEVEL:-$DEFAULT_EFFORT}"
+if ! has_arg "--effort" "$@"; then
+  args+=(--effort "$CLAUDE_CODE_EFFORT_LEVEL")
 fi
 if ! has_arg "--thinking" "$@"; then
   args+=(--thinking "$DEFAULT_THINKING")
@@ -253,5 +191,7 @@ fi
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/scripts/fexor-append-autonomy.inc.sh"
 fexor_maybe_append_autonomy "$@"
+
+print -r -- "[launch-deepseek] model=$SELECTED_MAIN  effort=${CLAUDE_CODE_EFFORT_LEVEL}  thinking=${DEFAULT_THINKING}  compact=${CLAUDE_CODE_AUTO_COMPACT_WINDOW}  out=${CLAUDE_CODE_MAX_OUTPUT_TOKENS}  config=${CLAUDE_CONFIG_DIR}"
 
 exec "$SCRIPT_DIR/cli-dev" "${args[@]}" "${forwarded_args[@]}"
