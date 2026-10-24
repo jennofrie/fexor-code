@@ -358,5 +358,7 @@ fi
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/scripts/fexor-append-autonomy.inc.sh"
 fexor_maybe_append_autonomy "$@"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/fexor-launcher-env.inc.sh"
 
 exec "$SCRIPT_DIR/cli-dev" "${args[@]}" "${passthrough_args[@]}"

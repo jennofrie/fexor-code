@@ -89,4 +89,12 @@ if ! has_arg "--setting-sources" "$@" && ! has_arg "--settings" "$@"; then
   args+=(--setting-sources "$DEFAULT_SETTING_SOURCES")
 fi
 
+# Shared red-team-safe launch defaults.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/fexor-launcher-env.inc.sh"
+# Apply the shared autonomy addendum unless the user supplied one.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/fexor-append-autonomy.inc.sh"
+fexor_maybe_append_autonomy "$@"
+
 exec "$SCRIPT_DIR/cli-dev" "${args[@]}" "$@"

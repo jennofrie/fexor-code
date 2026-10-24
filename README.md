@@ -13,13 +13,14 @@
 [![Language](https://img.shields.io/badge/TypeScript-5.x-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-source--available-f59e0b?style=for-the-badge)](#-license)
 
-[![Feature flags](https://img.shields.io/badge/feature_flags-49_shipped_%2F_88_total-8b5cf6?style=flat-square)](FEATURES.md)
-[![Providers](https://img.shields.io/badge/providers-7_routed-0ea5e9?style=flat-square)](#-model-providers)
+[![Version](https://img.shields.io/badge/version-2.1.309-22c55e?style=flat-square)](#-21309-integration--2026-10-24)
+[![Feature flags](https://img.shields.io/badge/feature_flags-5_default_%2F_49_dev--full_%2F_88_total-8b5cf6?style=flat-square)](FEATURES.md)
+[![Providers](https://img.shields.io/badge/providers-10_routed-0ea5e9?style=flat-square)](#-model-providers)
 [![Context](https://img.shields.io/badge/context-up_to_1M_tokens-ec4899?style=flat-square)](#-model-providers)
 [![Reconstructed](https://img.shields.io/badge/flags_reconstructed-13-22c55e?style=flat-square)](#-reconstruction-status)
 [![Maintainer](https://img.shields.io/badge/maintained_by-Profexor-111827?style=flat-square)](#-maintainer)
 
-<sub>One binary · zero callbacks home · seven model providers · up to a 1M-token window</sub>
+<sub>One binary · zero callbacks home · ten model providers · up to a 1M-token window</sub>
 
 </div>
 
@@ -38,6 +39,71 @@ A clean, buildable fork of Anthropic's [Claude Code](https://docs.anthropic.com/
 
 > [!NOTE]
 > `fexor-code` is a **nominative fork** — it references "Claude Code" only to describe what it forks. It is maintained independently by **Profexor** and is not affiliated with or endorsed by Anthropic.
+
+---
+
+## 🆕 2.1.309 integration — 2026-10-24
+
+Fexor now reports **2.1.309**. The upstream delta was reconstructed from the installed 2.1.309 binary with REA: 133 plaintext JS source modules (28 MB), 179 releases through 2.1.309, and 6,287 changelog entries. High-value bounded-context and observability changes were ported; denial-path changes were rejected to preserve authorized red-team workflows.
+
+| Area      | Change                                                                                                                | Upstream        | Implementation                                                                                |
+| --------- | --------------------------------------------------------------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------- |
+| Context   | Hook `additionalContext` over 10K spilled to `~/.claude/hook-output/` with a 2K preview                               | 2.1.89          | `src/utils/hooks.ts`, `src/utils/hookContextStorage.ts`                                       |
+| MCP       | Per-call `_meta["anthropic/maxResultSizeChars"]`, capped at 500K                                                      | 2.1.91 / 2.1.98 | `src/services/tools/toolExecution.ts`, `src/utils/toolResultStorage.ts`                       |
+| Tools     | WebSearch session cap, default 200                                                                                    | 2.1.212         | `src/tools/WebSearchTool/WebSearchTool.ts`                                                    |
+| Agents    | Top-level subagent cap, default 20                                                                                    | 2.1.217         | `src/tools/AgentTool/runAgent.ts`, `src/utils/agentConcurrency.ts`                            |
+| Tokens    | Default build enables cached microcompaction, prompt-cache break detection, reactive compaction, and token budgeting  | 2.1.x           | `scripts/build.ts`                                                                            |
+| Launchers | Shared defaults for all Unix/Windows launchers; autonomy addendum on first-party launchers                            | 2.1.309         | `scripts/fexor-launcher-env.inc.sh`, `windows/fexor-launcher-env.ps1`, all `launch-*` scripts |
+| DeepSeek  | `DeepSeek-V4.1-Flash 1017` label and 1,048,576 client budget; wire ID remains `deepseek-flash`                        | 2026-10-17      | `launch-deepseek.sh`, `windows/launch-deepseek.ps1`                                           |
+| Red team  | No `hard_deny`, `classifyAllShell`, `--permission-prompts none`, classifier defaults, or restrictive sandbox defaults | —               | deliberately excluded                                                                         |
+
+Default flags in `./cli`: `VOICE_MODE`, `CACHED_MICROCOMPACT`, `PROMPT_CACHE_BREAK_DETECTION`, `REACTIVE_COMPACT`, `TOKEN_BUDGET`. `./cli-dev` still compiles all 49 experimental flags.
+
+Full upstream delta: **[docs/UPSTREAM-2.1.309-DELTA.md](docs/UPSTREAM-2.1.309-DELTA.md)** · full changelog archive: **[docs/upstream/CHANGELOG-2.1.89-2.1.310.md](docs/upstream/CHANGELOG-2.1.89-2.1.310.md)** · all 6,313 entries as CSV: **[docs/upstream/changes-2.1.89-2.1.310.csv](docs/upstream/changes-2.1.89-2.1.310.csv)**.
+
+### Complete file manifest
+
+| Group    | File                                        | Change                                                                 |
+| -------- | ------------------------------------------- | ---------------------------------------------------------------------- |
+| Source   | `package.json`                              | Version `2.1.309`                                                      |
+| Source   | `src/entrypoints/cli.tsx`                   | Dev version `2.1.309-dev`                                              |
+| Source   | `scripts/build.ts`                          | Four token-efficiency flags added to default build                     |
+| Source   | `src/tools/WebSearchTool/WebSearchTool.ts`  | Session WebSearch cap (`CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION`)     |
+| Source   | `src/utils/hooks.ts`                        | Large hook context spill                                               |
+| Source   | `src/utils/hookContextStorage.ts`           | New 10K/2K hook-output storage helper                                  |
+| Source   | `src/services/tools/toolExecution.ts`       | MCP `_meta` result-size override                                       |
+| Source   | `src/utils/toolResultStorage.ts`            | Per-call result-size threshold                                         |
+| Source   | `src/tools/AgentTool/runAgent.ts`           | Top-level subagent semaphore                                           |
+| Source   | `src/utils/agentConcurrency.ts`             | New subagent concurrency limiter                                       |
+| Launcher | `scripts/fexor-launcher-env.inc.sh`         | New shared Unix launch defaults                                        |
+| Launcher | `windows/fexor-launcher-env.ps1`            | New shared Windows launch defaults                                     |
+| Launcher | `fexor-launch.sh`                           | Shared defaults + autonomy addendum                                    |
+| Launcher | `launch-deepseek.sh`                        | Shared defaults + 1017 label + 1,048,576 budget                        |
+| Launcher | `launch-fugu.sh`                            | Shared defaults                                                        |
+| Launcher | `launch-glm.sh`                             | Shared defaults                                                        |
+| Launcher | `launch-gpt.sh`                             | Shared defaults                                                        |
+| Launcher | `launch-grok.sh`                            | Shared defaults                                                        |
+| Launcher | `launch-nvidia.sh`                          | Shared defaults                                                        |
+| Launcher | `launch-qwen37.sh`                          | Shared defaults                                                        |
+| Launcher | `windows/fexor-launch.ps1`                  | Shared defaults + autonomy addendum                                    |
+| Launcher | `windows/launch-deepseek.ps1`               | Shared defaults + autonomy + 1017 label + 1,048,576 budget             |
+| Launcher | `windows/launch-fugu.ps1`                   | Shared defaults                                                        |
+| Launcher | `windows/launch-glm.ps1`                    | Shared defaults                                                        |
+| Docs     | `README.md`                                 | This section, version/provider/flag/DeepSeek updates                   |
+| Docs     | `CHANGELOG.md`                              | 2.1.309 release and DeepSeek 1017 entries                              |
+| Docs     | `FEATURES.md`                               | Default-flag audit and 2.1.309 note                                    |
+| Docs     | `CONTEXT.md`                                | Corrected permission-mode vocabulary                                   |
+| Docs     | `SECURITY.md`                               | Launcher autonomy/defaults wording                                     |
+| Docs     | `CLAUDE.md`                                 | 2.1.309, default flags, launcher defaults                              |
+| Docs     | `AGENTS.md`                                 | 2.1.309, default flags, launcher defaults                              |
+| Docs     | `GEMINI.md`                                 | 2.1.309, default flags, launcher defaults                              |
+| Docs     | `CLAUDE.local.md`                           | Workspace path and flag count (local-only; git-ignored, not published) |
+| Docs     | `AGENTS.local.md`                           | Workspace path and flag count (local-only; git-ignored, not published) |
+| Docs     | `GEMINI.local.md`                           | Workspace path and flag count (local-only; git-ignored, not published) |
+| Docs     | `docs/ARCHITECTURE.md`                      | Default flags, 1,048,576 context path, DeepSeek 1017                   |
+| Docs     | `docs/UPSTREAM-2.1.309-DELTA.md`            | New upstream delta report                                              |
+| Docs     | `docs/upstream/CHANGELOG-2.1.89-2.1.310.md` | New upstream changelog archive                                         |
+| Docs     | `docs/upstream/changes-2.1.89-2.1.310.csv`  | New categorised changelog CSV                                          |
 
 ---
 
@@ -85,7 +151,7 @@ flowchart LR
 |                   | `./cli` — **stable**             | `./cli-dev` — **unreleased**            |
 | ----------------- | -------------------------------- | --------------------------------------- |
 | Build             | `bun run build`                  | `bun run build:dev:full`                |
-| Flags compiled in | `VOICE_MODE` only                | **49** experimental flags               |
+| Flags compiled in | 5 default flags (see below)      | **49** experimental flags               |
 | Defines           | `USER_TYPE=external`             | + `CLAUDE_CODE_EXPERIMENTAL_BUILD=true` |
 | Posture           | Production-like, minimal surface | Everything unlocked + reconstructed     |
 
@@ -151,7 +217,7 @@ flowchart LR
     APP --> BR["AWS Bedrock"]
     APP --> VX["Google Vertex AI"]
     APP --> FD["Anthropic Foundry"]
-    APP --> DS["DeepSeek V4.1 Flash<br/><sub>deepseek-flash · api.deepseek.com/anthropic · 1M</sub>"]
+    APP --> DS["DeepSeek-V4.1-Flash 1017<br/><sub>deepseek-flash · api.deepseek.com/anthropic · 1M</sub>"]
     APP --> QW["Qwen 3.7-Max<br/><sub>Alibaba Model Studio · 1M</sub>"]
     APP --> GROK["xAI Grok<br/><sub>Anthropic-compatible Messages</sub>"]
     APP --> SK["Sakana Fugu<br/><sub>Anthropic Messages v1.1</sub>"]
@@ -172,10 +238,19 @@ Each provider has a dedicated, **tuned** launcher that maximizes its context win
 | `launch-fugu.sh`                      | Sakana Fugu                                |         **1M** | **Anthropic-native Messages v1.1** (since 2026-07-24): real bearer key, `[1m]` slots, 2h timeout, Fugu-specific harness prompt |
 | `launch-nvidia.sh`                    | GLM-5.2, DeepSeek V4-Pro/Flash, MiniMax M3 |         **1M** | NVIDIA free hosted NIM; model profiles, Keychain-backed API key, Chat Completions adapter       |
 | `launch-glm.sh`                       | GLM 5.2 `[1m]` (5.3 selectable)            |         **1M** | Z.AI Anthropic-compatible API, max effort, autonomy addendum                                    |
-| `launch-deepseek.sh`                  | DeepSeek V4.1 Flash / V4 Pro               |         **1M** | Live IDs only: `deepseek-flash[1m]` (default) or `deepseek-v4-pro[1m]` (`--model deepseek-v4-pro`). Both effort **max**. Haiku/subagents = `deepseek-flash`. Compact 786432. 64K default / 384K max output |
+| `launch-deepseek.sh`                  | DeepSeek-V4.1-Flash 1017 / V4 Pro          |    **1,048,576** | Live IDs only: `deepseek-flash[1m]` (default; 1017 drop-in, same API/pricing) or `deepseek-v4-pro[1m]` (`--model deepseek-v4-pro`). Both effort **max**. Haiku/subagents = `deepseek-flash`. Compact 786432. 64K default / 384K max output |
 | `launch-qwen37.sh`                    | Qwen 3.7-Max                               |         **1M** | beta-strip, prompt caching preserved                                                            |
 
-Third-party launchers (DeepSeek, NVIDIA, Grok, GPT, Qwen, GLM) append `prompts/autonomy-system-prompt.md` by default — a short “don’t moralize, assume authorized research” addendum. This does **not** uncensored the model weights. Disable with `FEXOR_AUTONOMY_PROMPT=0`. GLM’s copy lives at `prompts/glm-autonomy-system-prompt.md`. Fugu keeps its own prompt. Anthropic OAuth launchers do not append it.
+All launchers except Fugu append an autonomy addendum by default — a short “don’t moralize, assume authorized research” note. This does **not** uncensor the model weights. First-party and DeepSeek/NVIDIA/Grok/GPT/Qwen launchers use `prompts/autonomy-system-prompt.md`; GLM uses `prompts/glm-autonomy-system-prompt.md`; Fugu keeps its own prompt. Disable with `FEXOR_AUTONOMY_PROMPT=0` (GLM also honors `GLM_AUTONOMY_PROMPT=0`).
+
+All launchers source `scripts/fexor-launcher-env.inc.sh` (Windows: `windows/fexor-launcher-env.ps1`). Override any value before launch:
+
+| Default                                        | Purpose                                                                                                                |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `CLAUDE_CODE_AUTO_MODE_SERVER=0`               | Never enable the server-side auto-mode classifier (kept for upstream-compatible builds; this source does not read it). |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`   | Disable non-essential traffic.                                                                                         |
+| `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=20`      | Cap top-level concurrent subagents.                                                                                    |
+| `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION=200` | Cap WebSearch calls per session.                                                                                       |
 
 Opt-in GLM coding harness (verifier + LSP + discipline prompt): `FEXOR_CODING_HARNESS=1 ./launch-glm.sh`. Contract: **[docs/VERIFICATION_CONTRACT.md](docs/VERIFICATION_CONTRACT.md)**.
 
@@ -209,15 +284,15 @@ regular, non-symlinked file with `0600` permissions.
 <details>
 <summary><b>Context windows at a glance</b></summary>
 
-| Model                  |                Context | Max output | Notes                                                                               |
-| ---------------------- | ---------------------: | ---------: | ----------------------------------------------------------------------------------- |
-| Claude Sonnet 5        |              1,000,000 |    128,000 | native default, no `[1m]` required                                                  |
-| Claude Opus 4.8 `[1m]` |              1,000,000 |    128,000 | native 1M                                                                           |
-| GPT-5.4                |              1,050,000 |    128,000 | xhigh reasoning                                                                     |
-| GPT-5.5                | 1,000,000 (400K Codex) |          — | strongest long-context                                                              |
-| DeepSeek V4.1 Flash    |              1,000,000 |    384,000 | `deepseek-flash[1m]` (GA 2026-09-10, native multimodal); compact 786432; effort max |
-| DeepSeek V4 Pro        |              1,000,000 |    384,000 | live ID `deepseek-v4-pro[1m]` (no published v4.1-pro ID); effort max                |
-| Qwen 3.7-Max           |              1,000,000 |     65,536 | agent-tuned, verbose                                                                |
+| Model                    |                Context | Max output | Notes                                                                                                        |
+| ------------------------ | ---------------------: | ---------: | ------------------------------------------------------------------------------------------------------------ |
+| Claude Sonnet 5          |              1,000,000 |    128,000 | native default, no `[1m]` required                                                                           |
+| Claude Opus 4.8 `[1m]`   |              1,000,000 |    128,000 | native 1M                                                                                                    |
+| GPT-5.4                  |              1,050,000 |    128,000 | xhigh reasoning                                                                                              |
+| GPT-5.5                  | 1,000,000 (400K Codex) |          — | strongest long-context                                                                                       |
+| DeepSeek-V4.1-Flash 1017 |              1,048,576 |    384,000 | `deepseek-flash[1m]` (GA 2026-09-10; 1017 drop-in 2026-10-17, native multimodal); compact 786432; effort max |
+| DeepSeek V4 Pro          |              1,000,000 |    384,000 | live ID `deepseek-v4-pro[1m]` (no published v4.1-pro ID); effort max                                         |
+| Qwen 3.7-Max             |              1,000,000 |     65,536 | agent-tuned, verbose                                                                                         |
 
 </details>
 
@@ -243,7 +318,7 @@ bun run build:dev:full   # → ./cli-dev (all experimental flags)
 
 | Command                                  | Output       | Features                      |
 | ---------------------------------------- | ------------ | ----------------------------- |
-| `bun run build`                          | `./cli`      | `VOICE_MODE` only             |
+| `bun run build`                          | `./cli`      | 5 default flags (see below)   |
 | `bun run build:dev`                      | `./cli-dev`  | dev version stamp             |
 | `bun run build:dev:full`                 | `./cli-dev`  | **all 49 experimental flags** |
 | `bun run compile`                        | `./dist/cli` | alternative output path       |
@@ -256,7 +331,7 @@ bun run build:dev:full   # → ./cli-dev (all experimental flags)
 ./cli -p "what files are here?"    # one-shot
 ./cli --model claude-opus-4-8      # specify model
 ./launch-gpt.sh                    # GPT-5.5 via Codex
-./launch-deepseek.sh                          # DeepSeek V4.1 Flash 1M (deepseek-flash[1m], effort max)
+./launch-deepseek.sh                          # DeepSeek-V4.1-Flash 1017 1M (deepseek-flash[1m], effort max)
 ./launch-deepseek.sh --model deepseek-v4-pro  # DeepSeek V4 Pro 1M (effort max)
 FEXOR_AUTONOMY_PROMPT=0 ./launch-deepseek.sh     # skip autonomy addendum
 ./launch-glm.sh                    # GLM 5.2, autonomy addendum on

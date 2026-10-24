@@ -1,8 +1,10 @@
 #!/bin/zsh
-# fexor-code isolated launcher — DeepSeek V4.1 Flash / V4 Pro, effort max
+# fexor-code isolated launcher — DeepSeek-V4.1-Flash 1017 / V4 Pro, effort max
 # https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code
 #
-# Live API IDs (verified 2026-09-23): deepseek-flash, deepseek-v4-pro.
+# Live API IDs (verified 2026-10-24): deepseek-flash, deepseek-v4-pro.
+# 1017 (2026-10-17) is a drop-in update behind the same deepseek-flash ID:
+# API parameters and pricing are unchanged; context is 1,048,576 tokens.
 # Retired names (deepseek-v4-flash, deepseek-v4-flash-vision-exp) are not used.
 # There is no published deepseek-v4.1-pro ID; Pro is deepseek-v4-pro.
 #
@@ -10,12 +12,13 @@
 #   main/opus/sonnet = deepseek-flash[1m]
 #   haiku/subagents  = deepseek-flash
 #   effort           = max
+#   context budget   = 1048576
 #   compact window   = 786432
 #
 # Isolated from official Claude Code (~/.claude) and ~/Desktop/claude.
 #
 # Usage:
-#   ./launch-deepseek.sh                          # V4.1 Flash 1M, effort max
+#   ./launch-deepseek.sh                          # V4.1-Flash 1017 1M, effort max
 #   ./launch-deepseek.sh --model deepseek-v4-pro  # V4 Pro 1M, effort max
 #   ./launch-deepseek.sh -p "explain this repo"
 #   DEEPSEEK_VARIANT=pro ./launch-deepseek.sh
@@ -29,7 +32,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 DEEPSEEK_FLASH_MAIN="deepseek-flash[1m]"
 DEEPSEEK_FLASH_BARE="deepseek-flash"
-DEEPSEEK_FLASH_NAME="DeepSeek V4.1 Flash"
+DEEPSEEK_FLASH_NAME="DeepSeek-V4.1-Flash 1017"
 DEEPSEEK_PRO_MAIN="deepseek-v4-pro[1m]"
 DEEPSEEK_PRO_BARE="deepseek-v4-pro"
 DEEPSEEK_PRO_NAME="DeepSeek V4 Pro"
@@ -99,7 +102,7 @@ esac
 export ANTHROPIC_MODEL="$SELECTED_MAIN"
 # DeepSeek's documented Claude Code mapping points the Opus tier at Flash.
 # Pinning it to Pro billed Flash-quality output at V4 Pro rates (and since
-# 2026-09-14 deepseek-v4-pro requests route to V4.1 Flash anyway). Pro stays
+# 2026-09-14 deepseek-v4-pro requests route to V4.1-Flash 1017 anyway). Pro stays
 # reachable via --model pro / DEEPSEEK_VARIANT=pro and the /model picker.
 export ANTHROPIC_DEFAULT_OPUS_MODEL="$SELECTED_MAIN"
 export ANTHROPIC_DEFAULT_SONNET_MODEL="$SELECTED_MAIN"
@@ -118,7 +121,7 @@ export ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES="thinking,effort,max
 export CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING=1
 export MAX_THINKING_TOKENS=16000
 
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS="${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-1000000}"
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS="${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-1048576}"
 export CLAUDE_CODE_AUTO_COMPACT_WINDOW="${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-786432}"
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS="${CLAUDE_CODE_MAX_OUTPUT_TOKENS:-${DEEPSEEK_MAX_OUTPUT_TOKENS:-64000}}"
 export API_TIMEOUT_MS="${API_TIMEOUT_MS:-3000000}"
@@ -193,5 +196,8 @@ source "$SCRIPT_DIR/scripts/fexor-append-autonomy.inc.sh"
 fexor_maybe_append_autonomy "$@"
 
 print -r -- "[launch-deepseek] model=$SELECTED_MAIN  effort=${CLAUDE_CODE_EFFORT_LEVEL}  thinking=${DEFAULT_THINKING}  compact=${CLAUDE_CODE_AUTO_COMPACT_WINDOW}  out=${CLAUDE_CODE_MAX_OUTPUT_TOKENS}  config=${CLAUDE_CONFIG_DIR}"
+
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/fexor-launcher-env.inc.sh"
 
 exec "$SCRIPT_DIR/cli-dev" "${args[@]}" "${forwarded_args[@]}"

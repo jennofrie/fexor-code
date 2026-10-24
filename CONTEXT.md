@@ -28,9 +28,10 @@ changes don't touch the main working tree.
 (`UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, ...). May run a shell
 command, an LLM prompt, or an HTTP call; may block (exit 2) or observe.
 
-**PermissionMode** — the gating posture for tool approvals: `auto`,
-`manual`, `always`, `plan`. Determines whether a tool run prompts the user,
-auto-approves, or is denied.
+**PermissionMode** — the gating posture for tool approvals: `default`,
+`acceptEdits`, `bypassPermissions`, `dontAsk`, `plan`, plus `auto` when the
+transcript classifier is compiled. Determines whether a tool run prompts the
+user, auto-approves, or is denied.
 
 **MCP server** — a Model Context Protocol server the harness connects to
 (stdio / SSE / HTTP / WebSocket) to expose extra tools, resources, or prompts.

@@ -3,15 +3,15 @@
 All notable changes to **Fexor Code** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project does not yet follow semantic versioning (it tracks the upstream
-Claude Code snapshot version, currently `2.1.87`).
+Claude Code snapshot version, currently `2.1.309`).
 
 ## [Unreleased]
 
-### Changed — DeepSeek launchers: V4.1 Flash and V4 Pro (live IDs, max effort)
+### Changed — DeepSeek launchers: V4.1-Flash 1017 and V4 Pro (live IDs, max effort)
 
-- Live IDs only: default `deepseek-flash[1m]` (V4.1 Flash) and `deepseek-v4-pro[1m]` via `--model deepseek-v4-pro` / `DEEPSEEK_VARIANT=pro`. Haiku/subagents stay `deepseek-flash`.
+- Live IDs only: default `deepseek-flash[1m]` (V4.1-Flash 1017) and `deepseek-v4-pro[1m]` via `--model deepseek-v4-pro` / `DEEPSEEK_VARIANT=pro`. Haiku/subagents stay `deepseek-flash`.
 - Dropped retired `deepseek-v4-flash` / dated V4-Pro-0813 fallbacks and the V4.1 launch probe.
-- Both families default to effort `max`. Official Claude Code slot mapping: compact window `786432`, client 1M budget, `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`, `CLAUDE_CODE_AUTO_MODE_SERVER=0`.
+- Both families default to effort `max`. Official Claude Code slot mapping: compact window `786432`, client budget `1048576`, `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`, `CLAUDE_CODE_AUTO_MODE_SERVER=0`.
 - `src/utils/effort.ts` and `src/utils/context.ts` treat `deepseek-flash` the same as `deepseek-v4*` for max-effort and 384K output caps.
 
 ### Changed — Sakana Fugu launcher (Anthropic-native v1.1)
@@ -101,6 +101,51 @@ exact existing call-site contracts, verified per-flag, and shipped in `cli-dev`.
 - README launcher table now includes GLM, DeepSeek Flash, and the shared autonomy addendum.
 - Added `docs/ARCHITECTURE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `docs/VERIFICATION_CONTRACT.md`, this changelog, and GitHub issue/PR templates.
 - Refreshed `FEATURES.md` to ground-truth (88 source flags; 49 shipped).
+
+## [2.1.309] — Upstream delta port — 2026-10-24
+
+Reconstructed upstream source was compared against the installed Claude Code
+`2.1.309` native binary. The binary embeds 133 plaintext JS source modules
+(28 MB); these were carved and inspected statically with REA and source-level
+diffing. Full upstream changelog for `2.1.89`–`2.1.310` and a categorised CSV
+of all 6,313 entries are in `docs/upstream/`.
+
+### Added — token efficiency and bounded context
+
+- `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION` (default 200): session-wide
+  WebSearch cap, upstream 2.1.212.
+- Hook `additionalContext` over 10,000 characters is spilled to
+  `~/.claude/hook-output/` with a 2,000-character preview instead of entering
+  context, upstream 2.1.89.
+- `_meta["anthropic/maxResultSizeChars"]` MCP override, capped at 500,000
+  characters, upstream 2.1.91/2.1.98.
+- `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20): caps top-level
+  concurrent subagents; nested agents bypass the cap to avoid deadlocks,
+  upstream 2.1.217.
+- Stable build now enables `CACHED_MICROCOMPACT`,
+  `PROMPT_CACHE_BREAK_DETECTION`, `REACTIVE_COMPACT`, and `TOKEN_BUDGET` by
+  default.
+
+### Changed — version
+
+- Package and CLI version now report `2.1.309`.
+
+### Changed — DeepSeek V4.1-Flash 1017 launcher alignment
+
+- `launch-deepseek.sh` and `windows/launch-deepseek.ps1` now label the default
+  model `DeepSeek-V4.1-Flash 1017` and budget 1,048,576 context tokens.
+- The wire ID remains `deepseek-flash`. The 1017 release (2026-10-17) is a
+  drop-in update with unchanged API parameters and pricing; 384K remains the
+  output cap and 786432 the compact window.
+
+### Security — red-team posture preserved
+
+- `CYBER_RISK_INSTRUCTION` remains empty.
+- Deliberately **not** ported: auto-mode `hard_deny`, `classifyAllShell`,
+  `--permission-prompts none`, and new sandbox defaults. These add denial
+  paths that regress authorized security testing.
+- The upstream 2.1.299 cyber-safeguard notice change needs no action: Fexor
+  does not carry the Cyber Verification Program notice.
 
 ## [2.1.87] — Initial fork
 

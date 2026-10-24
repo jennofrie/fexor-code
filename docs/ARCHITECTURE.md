@@ -35,7 +35,7 @@ flags passed to `bun build`, and disabled branches are dead-code-eliminated.
 ```mermaid
 flowchart LR
     SRC["src/*.ts<br/>feature('X') call sites"] --> B["scripts/build.ts"]
-    B -->|defaultFeatures| S["./cli<br/>VOICE_MODE only"]
+    B -->|defaultFeatures| S["./cli<br/>5 default flags"]
     B -->|fullExperimentalFeatures| D["./cli-dev<br/>49 flags"]
     B -->|"--feature=X"| C["custom"]
     style S fill:#064e3b,stroke:#22c55e,color:#fff
@@ -91,9 +91,10 @@ Resolved in `utils/context.ts:getContextWindowForModel`, in precedence order:
 6. Otherwise → **200,000 default** for unknown models.
 
 > Third-party 1M models (DeepSeek, Qwen) are unknown to the table and would
-> default to 200K — so the launchers set `CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000`
-> instead of using `[1m]` (which would inject the Anthropic-only `context-1m`
-> beta those endpoints reject).
+> default to 200K — so the launchers set `CLAUDE_CODE_MAX_CONTEXT_TOKENS` to the
+> provider's true window (1,048,576 for DeepSeek-V4.1-Flash 1017, 1,000,000 for
+> Qwen) instead of relying on `[1m]`, which would inject the Anthropic-only
+> `context-1m` beta those endpoints reject.
 
 ### Output tokens
 
@@ -109,12 +110,13 @@ V4-Flash, and MiniMax M3 are capped at 16,384. The two DeepSeek profiles send
 `chat_template_kwargs.thinking_mode=adaptive`, its strongest automatic mode.
 
 The direct DeepSeek launcher uses the two live hosted IDs only:
-`deepseek-flash[1m]` (V4.1 Flash, default) and `deepseek-v4-pro[1m]` (current
-Pro). Haiku/subagents are `deepseek-flash`. Both default to effort `max`.
-Compact window is 786432. Client-side 1M budgeting still uses
-`CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000` because this snapshot does not know
-DeepSeek in the native-1M table. Default output is 64K, with an explicit 384K
-maximum through `DEEPSEEK_MAX_OUTPUT_TOKENS=384000`.
+`deepseek-flash[1m]` (V4.1-Flash 1017, default) and `deepseek-v4-pro[1m]`
+(current Pro). Haiku/subagents are `deepseek-flash`. Both default to effort
+`max`. Compact window is 786432. Client-side budgeting uses
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS=1048576`, matching the 1017 model card's
+1,048,576-token window; this snapshot does not know DeepSeek in the native-1M
+table. Default output is 64K, with an explicit 384K maximum through
+`DEEPSEEK_MAX_OUTPUT_TOKENS=384000`.
 
 ### Third-party fidelity
 

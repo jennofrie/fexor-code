@@ -3,6 +3,8 @@ import type { UUID } from "crypto";
 import { randomUUID } from "crypto";
 import uniqBy from "lodash-es/uniqBy.js";
 import { logForDebugging } from "src/utils/debug.js";
+import { acquireAgentSlot } from "../../utils/agentConcurrency.js";
+import { getAgentContext } from "../../utils/agentContext.js";
 import { getProjectRoot, getSessionId } from "../../bootstrap/state.js";
 import {
   getCommand,
@@ -249,7 +251,7 @@ function isRecordableMessage(
   );
 }
 
-export async function* runAgent({
+async function* runAgentImpl({
   agentDefinition,
   promptMessages,
   toolUseContext,
@@ -999,4 +1001,23 @@ function resolveSkillName(
   }
 
   return null;
+}
+
+/**
+ * Upstream 2.1.217: cap top-level concurrent subagents. Nested agents bypass
+ * the semaphore so a parent holding a slot can never deadlock waiting on its
+ * own children.
+ */
+export async function* runAgent(params: Parameters<typeof runAgentImpl>[0]) {
+  if (getAgentContext()) {
+    yield* runAgentImpl(params);
+    return;
+  }
+
+  const release = await acquireAgentSlot();
+  try {
+    yield* runAgentImpl(params);
+  } finally {
+    release();
+  }
 }

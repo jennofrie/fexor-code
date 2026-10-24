@@ -110,7 +110,16 @@ function getVersionChangelog(): string {
   );
 }
 
-const defaultFeatures = ["VOICE_MODE"];
+// Token-efficiency flags enabled for every Fexor build (upstream 2.1.x
+// improvements): cached microcompaction, prompt-cache break detection,
+// reactive compaction after prompt-too-long, and explicit token budgeting.
+const defaultFeatures = [
+  "VOICE_MODE",
+  "CACHED_MICROCOMPACT",
+  "PROMPT_CACHE_BREAK_DETECTION",
+  "REACTIVE_COMPACT",
+  "TOKEN_BUDGET",
+];
 const featureSet = new Set(defaultFeatures);
 for (let i = 0; i < args.length; i += 1) {
   const arg = args[i];

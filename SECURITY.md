@@ -47,10 +47,12 @@ applies to the repository:
 
 `fexor-code` removes the CLI's prompt-level guardrails (`CYBER_RISK_INSTRUCTION`
 is empty; the Read-tool cyber-risk footer is gone). The model's own safety
-training still applies. Third-party launchers append
+training still applies. All launchers except Fugu append
 `prompts/autonomy-system-prompt.md` (don't moralize; assume authorized research)
-unless `FEXOR_AUTONOMY_PROMPT=0`. That addendum is not a jailbreak and does not
-strip provider-side refusals.
+unless `FEXOR_AUTONOMY_PROMPT=0`. They also source shared defaults that keep the
+server-side auto-mode classifier off and cap concurrent subagents and WebSearch
+calls; every value is overridable in the environment. That addendum is not a
+jailbreak and does not strip provider-side refusals.
 
 You are responsible for how you operate the agent — especially with broad
 permissions, auto-approval modes, or untrusted MCP servers. Review permission

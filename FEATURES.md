@@ -1,6 +1,6 @@
 # Feature Flags Audit
 
-Audit date: 2026-03-31
+Audit date: 2026-03-31 — last verified 2026-10-24 for Fexor 2.1.309
 
 This repository currently references 88 `feature('FLAG')` compile-time flags.
 I re-checked them by bundling the CLI once per flag on top of the current
@@ -8,6 +8,11 @@ external-build defines and externals. Result:
 
 - 54 flags bundle cleanly in this snapshot
 - 34 flags still fail to bundle
+
+> **2.1.309 update (2026-10-24):** the default build now compiles five flags:
+> `VOICE_MODE`, `CACHED_MICROCOMPACT`, `PROMPT_CACHE_BREAK_DETECTION`,
+> `REACTIVE_COMPACT`, and `TOKEN_BUDGET`. The `dev-full` surface remains 49
+> flags; 88 total `feature()` call sites are still audited below.
 
 Important: "bundle cleanly" does not always mean "runtime-safe". Some flags
 still depend on optional native modules, claude.ai OAuth, GrowthBook gates, or
@@ -51,13 +56,25 @@ the current shipped/deferred truth.
   but the external binary does not boot cleanly with it because startup
   reaches the missing `@ant/computer-use-mcp` runtime package.
 
-## Default Build Flags
+## Default Build Flags (5)
 
 - `VOICE_MODE`
   This is now included in the default build pipeline, not just the dev build.
   It enables `/voice`, push-to-talk UI, voice notices, and dictation plumbing.
   Runtime still depends on claude.ai OAuth plus either the native audio module
   or a fallback recorder such as SoX.
+- `CACHED_MICROCOMPACT`
+  Caches microcompaction results across turns to avoid repeating token work.
+- `PROMPT_CACHE_BREAK_DETECTION`
+  Detects and reports why a server-side prompt cache broke, including tool
+  schema or system-prompt changes.
+- `REACTIVE_COMPACT`
+  Recovers from a `prompt is too long` / 413 response by compacting reactively.
+- `TOKEN_BUDGET`
+  Enables explicit token-budget accounting for long-running sessions.
+
+The four token-efficiency flags were already compiled in `dev-full`; Fexor
+2.1.309 promotes them to the stable default build.
 
 ## Working Experimental Features
 

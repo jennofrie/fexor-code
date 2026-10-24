@@ -204,4 +204,7 @@ if ! has_arg "--setting-sources" "$@" && ! has_arg "--settings" "$@"; then
   args+=(--setting-sources "")
 fi
 
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/fexor-launcher-env.inc.sh"
+
 exec "$SCRIPT_DIR/cli-dev" "${args[@]}" "$@"

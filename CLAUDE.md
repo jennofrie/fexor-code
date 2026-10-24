@@ -8,15 +8,18 @@ For humans, start with [README.md](README.md).
 `fexor-code` is a clean, buildable Bun/TypeScript fork of Anthropic's Claude Code
 CLI, reconstructed from the publicly-exposed source snapshot. Telemetry is
 stripped, prompt-level guardrails removed, and experimental feature flags are
-unlocked — including **13 flags reconstructed** from missing source files. See
-[README.md](README.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+unlocked — including **13 flags reconstructed** from missing source files.
+Tracks upstream **2.1.309** (2026-10-24) with bounded-context ports and
+red-team-safe launcher defaults. See [README.md](README.md),
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and
+[docs/UPSTREAM-2.1.309-DELTA.md](docs/UPSTREAM-2.1.309-DELTA.md).
 
 ## Build & run
 
 | Task            | Command                                                         |
 | --------------- | --------------------------------------------------------------- |
 | Install deps    | `bun install`                                                   |
-| Stable build    | `bun run build` → `./cli`                                       |
+| Stable build    | `bun run build` → `./cli` (5 default flags)                     |
 | Full dev build  | `bun run build:dev:full` → `./cli-dev` (all experimental flags) |
 | Custom flags    | `bun run ./scripts/build.ts --feature=FLAG`                     |
 | Run from source | `bun run dev`                                                   |
@@ -74,7 +77,8 @@ verify step for each.
 - Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`).
 - ESM with `.js` import specifiers resolving to `.ts`/`.tsx`; tools via `buildTool`; Zod v4.
 - No telemetry, no callbacks home. Never commit `.env*`, keys, tokens, or `tmp/`.
-- Third-party launchers append `prompts/autonomy-system-prompt.md` unless `FEXOR_AUTONOMY_PROMPT=0`.
+- All launchers except Fugu append `prompts/autonomy-system-prompt.md` unless `FEXOR_AUTONOMY_PROMPT=0`.
+- All launchers source `scripts/fexor-launcher-env.inc.sh` (Windows: `windows/fexor-launcher-env.ps1`) for shared, overridable defaults.
 
 ## Agent skills
 

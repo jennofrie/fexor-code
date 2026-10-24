@@ -1,10 +1,12 @@
 #Requires -Version 5.1
-# fexor-code isolated launcher for Windows — DeepSeek V4.1 Flash / V4 Pro.
-# Live API IDs: deepseek-flash, deepseek-v4-pro. Both effort max.
+# fexor-code isolated launcher for Windows — DeepSeek-V4.1-Flash 1017 / V4 Pro.
+# Live API IDs (verified 2026-10-24): deepseek-flash, deepseek-v4-pro. Both effort max.
+# 1017 (2026-10-17) is a drop-in update behind the same deepseek-flash ID:
+# API parameters and pricing are unchanged; context is 1,048,576 tokens.
 # Retired deepseek-v4-flash aliases are not used.
 #
 # Usage:
-#   .\launch-deepseek.ps1                          # V4.1 Flash 1M, effort max
+#   .\launch-deepseek.ps1                          # V4.1-Flash 1017 1M, effort max
 #   .\launch-deepseek.ps1 --model deepseek-v4-pro  # V4 Pro 1M, effort max
 #   .\launch-deepseek.ps1 -p "explain this repo"
 #   $env:DEEPSEEK_VARIANT="pro"; .\launch-deepseek.ps1
@@ -18,10 +20,11 @@ $ErrorActionPreference = "Stop"
 
 $env:CLAUDE_CONFIG_DIR = "$env:USERPROFILE\.fexor-code"
 $ScriptDir = $PSScriptRoot
+. (Join-Path $ScriptDir "fexor-launcher-env.ps1")
 
 $DEEPSEEK_FLASH_MAIN = "deepseek-flash[1m]"
 $DEEPSEEK_FLASH_BARE = "deepseek-flash"
-$DEEPSEEK_FLASH_NAME = "DeepSeek V4.1 Flash"
+$DEEPSEEK_FLASH_NAME = "DeepSeek-V4.1-Flash 1017"
 $DEEPSEEK_PRO_MAIN   = "deepseek-v4-pro[1m]"
 $DEEPSEEK_PRO_NAME   = "DeepSeek V4 Pro"
 
@@ -144,7 +147,7 @@ $env:ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES = "thinking,effort,ma
 $env:ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES = "thinking,effort,max_effort"
 $env:CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING = "1"
 $env:MAX_THINKING_TOKENS = "16000"
-$env:CLAUDE_CODE_MAX_CONTEXT_TOKENS = if ($env:CLAUDE_CODE_MAX_CONTEXT_TOKENS) { $env:CLAUDE_CODE_MAX_CONTEXT_TOKENS } else { "1000000" }
+$env:CLAUDE_CODE_MAX_CONTEXT_TOKENS = if ($env:CLAUDE_CODE_MAX_CONTEXT_TOKENS) { $env:CLAUDE_CODE_MAX_CONTEXT_TOKENS } else { "1048576" }
 $env:CLAUDE_CODE_AUTO_COMPACT_WINDOW = if ($env:CLAUDE_CODE_AUTO_COMPACT_WINDOW) { $env:CLAUDE_CODE_AUTO_COMPACT_WINDOW } else { "786432" }
 $env:CLAUDE_CODE_MAX_OUTPUT_TOKENS = if ($env:CLAUDE_CODE_MAX_OUTPUT_TOKENS) { $env:CLAUDE_CODE_MAX_OUTPUT_TOKENS } elseif ($env:DEEPSEEK_MAX_OUTPUT_TOKENS) { $env:DEEPSEEK_MAX_OUTPUT_TOKENS } else { "64000" }
 $env:API_TIMEOUT_MS = if ($env:API_TIMEOUT_MS) { $env:API_TIMEOUT_MS } else { "3000000" }
@@ -199,6 +202,14 @@ if (-not (Has-Arg '--effort' $args)) {
 if (-not (Has-Arg '--thinking' $args)) {
     $launchArgs.Add('--thinking'); $launchArgs.Add($defaultThinking)
 }
+# Shared autonomy addendum unless the user supplied one.
+$autonomyPrompt = Join-Path (Split-Path $ScriptDir -Parent) "prompts\autonomy-system-prompt.md"
+if (-not (Has-Arg '--append-system-prompt' $args) -and
+    -not (Has-Arg '--append-system-prompt-file' $args) -and
+    (Test-Path $autonomyPrompt)) {
+    $launchArgs.Add('--append-system-prompt-file'); $launchArgs.Add($autonomyPrompt)
+}
+
 $launchArgs.AddRange([string[]]$args)
 
 $cliBin = Join-Path (Split-Path $ScriptDir -Parent) "cli-dev.exe"

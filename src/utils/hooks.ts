@@ -11,6 +11,7 @@ import { TaskOutput } from "./task/TaskOutput.js";
 import { getCwd } from "./cwd.js";
 import { randomUUID } from "crypto";
 import { formatShellPrefixCommand } from "./bash/shellPrefix.js";
+import { spillLargeHookContext } from "./hookContextStorage.js";
 import {
   getHookEnvFilePath,
   invalidateSessionEnvCache,
@@ -2802,13 +2803,18 @@ async function* executeHooks({
       };
     }
 
-    // Collect additional context from hooks
+    // Collect additional context from hooks. Large output is spilled to disk
+    // with a bounded preview so a verbose hook cannot flood the context window.
     if (result.additionalContext) {
+      const additionalContext = await spillLargeHookContext(
+        result.additionalContext,
+        hookName
+      );
       logForDebugging(
         `Hook ${hookEvent} (${getHookDisplayText(result.hook)}) provided additionalContext (${result.additionalContext.length} chars)`
       );
       yield {
-        additionalContexts: [result.additionalContext],
+        additionalContexts: [additionalContext],
       };
     }
 

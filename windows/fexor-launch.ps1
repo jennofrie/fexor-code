@@ -15,6 +15,7 @@
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = $PSScriptRoot
+. (Join-Path $ScriptDir "fexor-launcher-env.ps1")
 $defaultModel    = if ($env:FEXOR_MODEL) { $env:FEXOR_MODEL } else { "sonnet" }
 $defaultEffort   = "high"
 $defaultThinking = "adaptive"
@@ -80,6 +81,14 @@ if (-not (Has-Arg '--setting-sources' $args) -and -not (Has-Arg '--settings' $ar
     if ($settingSrc -ne '') {
         $launchArgs.Add('--setting-sources'); $launchArgs.Add($settingSrc)
     }
+}
+
+# Shared autonomy addendum unless the user supplied one.
+$autonomyPrompt = Join-Path (Split-Path $ScriptDir -Parent) "prompts\autonomy-system-prompt.md"
+if (-not (Has-Arg '--append-system-prompt' $args) -and
+    -not (Has-Arg '--append-system-prompt-file' $args) -and
+    (Test-Path $autonomyPrompt)) {
+    $launchArgs.Add('--append-system-prompt-file'); $launchArgs.Add($autonomyPrompt)
 }
 
 $launchArgs.AddRange([string[]]$args)

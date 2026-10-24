@@ -21,6 +21,7 @@ $ErrorActionPreference = "Stop"
 
 $env:CLAUDE_CONFIG_DIR = "$env:USERPROFILE\.fexor-code-fugu"
 $ScriptDir = $PSScriptRoot
+. (Join-Path $ScriptDir "fexor-launcher-env.ps1")
 
 # ── Defensive: clear provider env from parent shell ───────────────────────────
 foreach ($v in @(
