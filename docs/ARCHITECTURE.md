@@ -55,6 +55,7 @@ flowchart LR
 | `services/`                                  | API clients (`api/claude.ts`, `withRetry`), OAuth/MCP, compaction (`autoCompact`, `microCompact`, `reactiveCompact`, `snipCompact`), analytics **stubs** |
 | `services/api/codex-fetch-adapter.ts`        | translates Anthropic Messages → OpenAI Responses for GPT/Codex                                                                                           |
 | `services/api/nvidia-chat-adapter.ts`        | translates Anthropic Messages ↔ NVIDIA Chat Completions and enforces GLM-5.2, DeepSeek V4-Pro/Flash, and MiniMax M3 limits/reasoning profiles            |
+| `tools/WebSearchTool/deepseekSearch.ts`      | DeepSeek Search API adapter: ranking, dedup, domain filters, LRU cache, retries                                                                          |
 | `utils/model/`                               | provider routing, context-window/output/effort resolution, capability overrides                                                                          |
 | `state/`                                     | single app store (REPL + permission gate)                                                                                                                |
 | `hooks/` · `components/`                     | Ink UI                                                                                                                                                   |
@@ -78,6 +79,12 @@ flowchart TD
     EP -->|api.anthropic.com| ANT["Anthropic"]
     EP -->|api.deepseek.com / dashscope| THREEP["DeepSeek / Qwen<br/><sub>core Messages only</sub>"]
 ```
+
+### Web search
+
+- Anthropic, Vertex, and Foundry use the server-side `web_search_20250305` tool.
+- Any endpoint on `api.deepseek.com` uses `POST /v1/tools/search` with the same bearer key. Results are ranked by `rerank_score`, authority, and date; URLs are canonicalized and deduped; domain filters apply as query operators and local host checks; a 10-minute LRU cache avoids repeat calls; 408/429/5xx responses retry three times with bounded backoff.
+- Output is bounded to 8 results, 1,200 characters per detail, and 12,000 characters per search by default. The session budget is 200 searches with 100/hour refills; `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION` and `CLAUDE_CODE_WEB_SEARCH_REFILLS_PER_HOUR` override it.
 
 ### Context window
 

@@ -46,16 +46,17 @@ A clean, buildable fork of Anthropic's [Claude Code](https://docs.anthropic.com/
 
 Fexor now reports **2.1.309**. The upstream delta was reconstructed from the installed 2.1.309 binary with REA: 133 plaintext JS source modules (28 MB), 179 releases through 2.1.309, and 6,287 changelog entries. High-value bounded-context and observability changes were ported; denial-path changes were rejected to preserve authorized red-team workflows.
 
-| Area      | Change                                                                                                                | Upstream        | Implementation                                                                                |
-| --------- | --------------------------------------------------------------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------- |
-| Context   | Hook `additionalContext` over 10K spilled to `~/.claude/hook-output/` with a 2K preview                               | 2.1.89          | `src/utils/hooks.ts`, `src/utils/hookContextStorage.ts`                                       |
-| MCP       | Per-call `_meta["anthropic/maxResultSizeChars"]`, capped at 500K                                                      | 2.1.91 / 2.1.98 | `src/services/tools/toolExecution.ts`, `src/utils/toolResultStorage.ts`                       |
-| Tools     | WebSearch session cap, default 200                                                                                    | 2.1.212         | `src/tools/WebSearchTool/WebSearchTool.ts`                                                    |
-| Agents    | Top-level subagent cap, default 20                                                                                    | 2.1.217         | `src/tools/AgentTool/runAgent.ts`, `src/utils/agentConcurrency.ts`                            |
-| Tokens    | Default build enables cached microcompaction, prompt-cache break detection, reactive compaction, and token budgeting  | 2.1.x           | `scripts/build.ts`                                                                            |
-| Launchers | Shared defaults for all Unix/Windows launchers; autonomy addendum on first-party launchers                            | 2.1.309         | `scripts/fexor-launcher-env.inc.sh`, `windows/fexor-launcher-env.ps1`, all `launch-*` scripts |
-| DeepSeek  | `DeepSeek-V4.1-Flash 1017` label and 1,048,576 client budget; wire ID remains `deepseek-flash`                        | 2026-10-17      | `launch-deepseek.sh`, `windows/launch-deepseek.ps1`                                           |
-| Red team  | No `hard_deny`, `classifyAllShell`, `--permission-prompts none`, classifier defaults, or restrictive sandbox defaults | —               | deliberately excluded                                                                         |
+| Area      | Change                                                                                                                | Upstream          | Implementation                                                                                |
+| --------- | --------------------------------------------------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------- |
+| Context   | Hook `additionalContext` over 10K spilled to `~/.claude/hook-output/` with a 2K preview                               | 2.1.89            | `src/utils/hooks.ts`, `src/utils/hookContextStorage.ts`                                       |
+| MCP       | Per-call `_meta["anthropic/maxResultSizeChars"]`, capped at 500K                                                      | 2.1.91 / 2.1.98   | `src/services/tools/toolExecution.ts`, `src/utils/toolResultStorage.ts`                       |
+| Tools     | WebSearch session budget + time-based refill                                                                          | 2.1.212 / 2.1.290 | `src/tools/WebSearchTool/WebSearchTool.ts`                                                    |
+| Agents    | Top-level subagent cap, default 20                                                                                    | 2.1.217           | `src/tools/AgentTool/runAgent.ts`, `src/utils/agentConcurrency.ts`                            |
+| Tokens    | Default build enables cached microcompaction, prompt-cache break detection, reactive compaction, and token budgeting  | 2.1.x             | `scripts/build.ts`                                                                            |
+| Launchers | Shared defaults for all Unix/Windows launchers; autonomy addendum on first-party launchers                            | 2.1.309           | `scripts/fexor-launcher-env.inc.sh`, `windows/fexor-launcher-env.ps1`, all `launch-*` scripts |
+| DeepSeek  | `DeepSeek-V4.1-Flash 1017` label and 1,048,576 client budget; wire ID remains `deepseek-flash`                        | 2026-10-17        | `launch-deepseek.sh`, `windows/launch-deepseek.ps1`                                           |
+| Search    | Native DeepSeek Search backend with ranked snippets/summaries, dedup, cache, retries, and token bounds                | Fexor extension   | `src/tools/WebSearchTool/deepseekSearch.ts`, `WebSearchTool.ts`, `prompt.ts`, `UI.tsx`        |
+| Red team  | No `hard_deny`, `classifyAllShell`, `--permission-prompts none`, classifier defaults, or restrictive sandbox defaults | —                 | deliberately excluded                                                                         |
 
 Default flags in `./cli`: `VOICE_MODE`, `CACHED_MICROCOMPACT`, `PROMPT_CACHE_BREAK_DETECTION`, `REACTIVE_COMPACT`, `TOKEN_BUDGET`. `./cli-dev` still compiles all 49 experimental flags.
 
@@ -68,7 +69,10 @@ Full upstream delta: **[docs/UPSTREAM-2.1.309-DELTA.md](docs/UPSTREAM-2.1.309-DE
 | Source   | `package.json`                              | Version `2.1.309`                                                      |
 | Source   | `src/entrypoints/cli.tsx`                   | Dev version `2.1.309-dev`                                              |
 | Source   | `scripts/build.ts`                          | Four token-efficiency flags added to default build                     |
-| Source   | `src/tools/WebSearchTool/WebSearchTool.ts`  | Session WebSearch cap (`CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION`)     |
+| Source   | `src/tools/WebSearchTool/WebSearchTool.ts`  | Session budget, DeepSeek fallback, bounded result formatting           |
+| Source   | `src/tools/WebSearchTool/deepseekSearch.ts` | New DeepSeek Search API adapter (rank, dedup, cache, retries)          |
+| Source   | `src/tools/WebSearchTool/prompt.ts`         | Provider-aware search guidance                                         |
+| Source   | `src/tools/WebSearchTool/UI.tsx`            | Result count in the search summary                                     |
 | Source   | `src/utils/hooks.ts`                        | Large hook context spill                                               |
 | Source   | `src/utils/hookContextStorage.ts`           | New 10K/2K hook-output storage helper                                  |
 | Source   | `src/services/tools/toolExecution.ts`       | MCP `_meta` result-size override                                       |
@@ -106,6 +110,39 @@ Full upstream delta: **[docs/UPSTREAM-2.1.309-DELTA.md](docs/UPSTREAM-2.1.309-DE
 | Docs     | `docs/upstream/changes-2.1.89-2.1.310.csv`  | New categorised changelog CSV                                          |
 
 ---
+
+## 🔎 Web search
+
+Claude Code's built-in search is an Anthropic server-side tool (`web_search_20250305`). It works only on Anthropic, Vertex, and Foundry, returns title/URL links, and has no client-side cache. Fexor keeps that path and adds a native DeepSeek backend for DeepSeek launchers.
+
+| Capability     | Anthropic path (Claude Code + Fexor) | Fexor DeepSeek path                                            |
+| -------------- | ------------------------------------ | -------------------------------------------------------------- |
+| Backend        | server-side `web_search_20250305`    | `POST https://api.deepseek.com/v1/tools/search`                |
+| Providers      | Anthropic, Vertex, Foundry           | any launcher pointing at `api.deepseek.com`                    |
+| Result fields  | title, URL                           | title, URL, snippet, summary, site, date, relevance, authority |
+| Ranking        | provider-side                        | local sort by `rerank_score`, authority, date                  |
+| Dedup          | none                                 | URL canonicalization + dedup                                   |
+| Domain filters | provider-side                        | query operators + local host filter                            |
+| Cache          | none                                 | 10-minute LRU (configurable)                                   |
+| Retries        | provider-side                        | 3 attempts on 408/429/5xx with bounded backoff                 |
+| Output bound   | tool-result limit                    | 8 results, 1,200 chars/detail, 12,000 chars/result             |
+| Budget         | 200/session, refills 100/hour        | same                                                           |
+
+DeepSeek uses the key already set by `launch-deepseek.sh`; no second key is required. DeepSeek bills per successful request (published at `$0.75` per 1,000 successful calls); failed and zero-result calls are not billed. Other providers still need their own search key; the adapter is structured for that next step.
+
+| Env var                                    |                           Default | Purpose                                  |
+| ------------------------------------------ | --------------------------------: | ---------------------------------------- |
+| `FEXOR_SEARCH_RESULT_COUNT`                |                               `8` | Results per search (1–20)                |
+| `FEXOR_SEARCH_HIT_DETAIL_CHARS`            |                            `1200` | Per-result summary/snippet cap           |
+| `FEXOR_SEARCH_MAX_OUTPUT_CHARS`            |                           `12000` | Total formatted search result cap        |
+| `FEXOR_SEARCH_CACHE_TTL_MS`                |                          `600000` | Cache TTL; `0` disables                  |
+| `FEXOR_SEARCH_CACHE_MAX`                   |                             `100` | Maximum cached queries                   |
+| `FEXOR_SEARCH_TIMEOUT_MS`                  |                           `20000` | Per-request timeout                      |
+| `DEEPSEEK_SEARCH_BASE_URL`                 | derived from `ANTHROPIC_BASE_URL` | Override the DeepSeek API origin         |
+| `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION` |                             `200` | Session search budget                    |
+| `CLAUDE_CODE_WEB_SEARCH_REFILLS_PER_HOUR`  |                             `100` | Budget refill rate; `0` disables refills |
+
+Search remains a normal permission-gated tool; this adds no denial path. The existing `WebSearch` permission rules still apply, and the budget-exhausted notice tells the model not to bypass search via curl, a browser, or a proxy.
 
 ## 🏛️ Architecture
 

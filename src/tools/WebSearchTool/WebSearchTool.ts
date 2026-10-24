@@ -15,9 +15,10 @@ import {
   getMainLoopModel,
   getSmallFastModel,
 } from "../../utils/model/model.js";
-import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
+import { jsonParse } from "../../utils/slowOperations.js";
 import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import { getWebSearchPrompt, WEB_SEARCH_TOOL_NAME } from "./prompt.js";
+import { getDeepSeekSearchConfig, searchDeepSeek } from "./deepseekSearch.js";
 import {
   getToolUseSummary,
   renderToolResultMessage,
@@ -25,12 +26,85 @@ import {
   renderToolUseProgressMessage,
 } from "./UI.js";
 
-// Upstream 2.1.212: session-wide cap on WebSearch calls to stop runaway loops.
-let webSearchCallCount = 0;
+// Upstream 2.1.212/2.1.290: session budget with a time-based refill.
+const DEFAULT_MAX_WEB_SEARCHES = 200;
+const DEFAULT_WEB_SEARCH_REFILLS_PER_HOUR = 100;
+let webSearchBudget: number | null = null;
+let lastWebSearchRefillAt = Date.now();
 
 function getMaxWebSearchesPerSession(): number {
   const raw = Number(process.env.CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 200;
+  return Number.isFinite(raw) && raw > 0
+    ? Math.floor(raw)
+    : DEFAULT_MAX_WEB_SEARCHES;
+}
+
+function getWebSearchRefillsPerHour(): number {
+  const raw = Number(process.env.CLAUDE_CODE_WEB_SEARCH_REFILLS_PER_HOUR);
+  return Number.isFinite(raw) && raw >= 0
+    ? Math.floor(raw)
+    : DEFAULT_WEB_SEARCH_REFILLS_PER_HOUR;
+}
+
+function takeWebSearchBudget(): {
+  ok: boolean;
+  max: number;
+  refillsPerHour: number;
+  retryAfterSeconds?: number;
+} {
+  const max = getMaxWebSearchesPerSession();
+  const refillsPerHour = getWebSearchRefillsPerHour();
+  if (webSearchBudget === null) {
+    webSearchBudget = max;
+  }
+
+  if (refillsPerHour > 0) {
+    const intervalMs = 3_600_000 / refillsPerHour;
+    const gained = Math.floor(
+      (Date.now() - lastWebSearchRefillAt) / intervalMs
+    );
+    if (gained > 0) {
+      webSearchBudget = Math.min(max, webSearchBudget + gained);
+      lastWebSearchRefillAt += gained * intervalMs;
+    }
+  }
+
+  if (webSearchBudget <= 0) {
+    const intervalMs = refillsPerHour > 0 ? 3_600_000 / refillsPerHour : null;
+    return {
+      ok: false,
+      max,
+      refillsPerHour,
+      retryAfterSeconds:
+        intervalMs === null
+          ? undefined
+          : Math.max(
+              1,
+              Math.ceil(
+                (lastWebSearchRefillAt + intervalMs - Date.now()) / 1000
+              )
+            ),
+    };
+  }
+
+  webSearchBudget -= 1;
+  return { ok: true, max, refillsPerHour };
+}
+
+function buildBudgetExhaustedMessage(budget: {
+  max: number;
+  refillsPerHour: number;
+  retryAfterSeconds?: number;
+}): string {
+  const refill =
+    budget.refillsPerHour > 0
+      ? ` The budget refills at ${budget.refillsPerHour}/hour${
+          budget.retryAfterSeconds
+            ? `; the next search is available in about ${budget.retryAfterSeconds}s`
+            : ""
+        }.`
+      : " It does not refill in this session.";
+  return `Web search was not performed: this session's web search budget is used up (${budget.max} calls).${refill} Do not work around the limit by querying search engines with curl/wget, a browser, or a third-party proxy/archive service.`;
 }
 
 const inputSchema = lazySchema(() =>
@@ -54,6 +128,12 @@ const searchResultSchema = lazySchema(() => {
   const searchHitSchema = z.object({
     title: z.string().describe("The title of the search result"),
     url: z.string().describe("The URL of the search result"),
+    snippet: z.string().optional().describe("Short query-relevant excerpt"),
+    summary: z.string().optional().describe("Longer query-relevant summary"),
+    siteName: z.string().nullable().optional().describe("Site name"),
+    date: z.string().nullable().optional().describe("Publication date"),
+    rerankScore: z.number().optional().describe("Search relevance score"),
+    authority: z.number().optional().describe("Source authority tier"),
   });
 
   return z.object({
@@ -73,6 +153,10 @@ const outputSchema = lazySchema(() =>
     durationSeconds: z
       .number()
       .describe("Time taken to complete the search operation"),
+    provider: z
+      .enum(["anthropic", "deepseek"])
+      .optional()
+      .describe("Search backend that produced the results"),
   })
 );
 type OutputSchema = ReturnType<typeof outputSchema>;
@@ -157,6 +241,7 @@ function makeOutputFromSearchResponse(
     query,
     results,
     durationSeconds,
+    provider: "anthropic",
   };
 }
 
@@ -177,6 +262,12 @@ export const WebSearchTool = buildTool({
     return summary ? `Searching for ${summary}` : "Searching the web";
   },
   isEnabled() {
+    // DeepSeek's native Search API works on every launcher that points at a
+    // DeepSeek endpoint, including the firstParty-compatible Messages route.
+    if (getDeepSeekSearchConfig()) {
+      return true;
+    }
+
     const provider = getAPIProvider();
     const model = getMainLoopModel();
 
@@ -263,13 +354,64 @@ export const WebSearchTool = buildTool({
     return { result: true };
   },
   async call(input, context, _canUseTool, _parentMessage, onProgress) {
-    const maxWebSearches = getMaxWebSearchesPerSession();
-    if (webSearchCallCount >= maxWebSearches) {
-      throw new Error(
-        `Web search limit reached for this session (${maxWebSearches} calls). Set CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION to raise it.`
-      );
+    const budget = takeWebSearchBudget();
+    if (!budget.ok) {
+      const data: Output = {
+        query: input.query,
+        provider: getDeepSeekSearchConfig() ? "deepseek" : "anthropic",
+        results: [buildBudgetExhaustedMessage(budget)],
+        durationSeconds: 0,
+      };
+      return { data };
     }
-    webSearchCallCount += 1;
+
+    if (getDeepSeekSearchConfig()) {
+      const startedAt = performance.now();
+      onProgress?.({
+        toolUseID: `deepseek-search-${Date.now()}`,
+        data: { type: "query_update", query: input.query },
+      });
+      try {
+        const result = await searchDeepSeek({
+          query: input.query,
+          allowedDomains: input.allowed_domains,
+          blockedDomains: input.blocked_domains,
+          signal: context.abortController.signal,
+        });
+        onProgress?.({
+          toolUseID: `deepseek-search-${Date.now()}`,
+          data: {
+            type: "search_results_received",
+            resultCount: result.hits.length,
+            query: input.query,
+          },
+        });
+        const data: Output = {
+          query: input.query,
+          provider: "deepseek",
+          results: [
+            {
+              tool_use_id: `deepseek-${Date.now()}`,
+              content: result.hits,
+            },
+          ],
+          durationSeconds: result.durationSeconds,
+        };
+        return { data };
+      } catch (error) {
+        const data: Output = {
+          query: input.query,
+          provider: "deepseek",
+          results: [
+            `Web search failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          ],
+          durationSeconds: (performance.now() - startedAt) / 1000,
+        };
+        return { data };
+      }
+    }
 
     const startTime = performance.now();
     const { query } = input;
@@ -419,8 +561,9 @@ export const WebSearchTool = buildTool({
   },
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     const { query, results } = output;
+    const providerLabel = output.provider ? ` (${output.provider})` : "";
 
-    let formattedOutput = `Web search results for query: "${query}"\n\n`;
+    let formattedOutput = `Web search results for query: "${query}"${providerLabel}\n\n`;
 
     // Process the results array - it can contain both string summaries and search result objects.
     // Guard against null/undefined entries that can appear after JSON round-tripping
@@ -430,17 +573,45 @@ export const WebSearchTool = buildTool({
         return;
       }
       if (typeof result === "string") {
-        // Text summary
         formattedOutput += result + "\n\n";
-      } else {
-        // Search result with links
-        if (result.content?.length > 0) {
-          formattedOutput += `Links: ${jsonStringify(result.content)}\n\n`;
-        } else {
-          formattedOutput += "No links found.\n\n";
-        }
+        return;
       }
+      if (!result.content?.length) {
+        formattedOutput += "No links found.\n\n";
+        return;
+      }
+      const detailLimit = (() => {
+        const raw = Number(process.env.FEXOR_SEARCH_HIT_DETAIL_CHARS);
+        return Number.isFinite(raw) && raw >= 200 ? Math.floor(raw) : 1200;
+      })();
+      result.content.forEach((hit, index) => {
+        formattedOutput += `${index + 1}. ${hit.title}\n   ${hit.url}\n`;
+        const meta = [hit.siteName, hit.date].filter(Boolean).join(" · ");
+        if (meta) {
+          formattedOutput += `   ${meta}\n`;
+        }
+        const detail = hit.summary || hit.snippet;
+        if (detail) {
+          const bounded =
+            detail.length > detailLimit
+              ? `${detail.slice(0, detailLimit)}…`
+              : detail;
+          formattedOutput += `   ${bounded}\n`;
+        }
+        formattedOutput += "\n";
+      });
     });
+
+    const maxChars = (() => {
+      const raw = Number(process.env.FEXOR_SEARCH_MAX_OUTPUT_CHARS);
+      return Number.isFinite(raw) && raw >= 1000 ? Math.floor(raw) : 12_000;
+    })();
+    if (formattedOutput.length > maxChars) {
+      formattedOutput = `${formattedOutput.slice(
+        0,
+        maxChars
+      )}\n\n[Search output truncated to bound context.]`;
+    }
 
     formattedOutput +=
       "\nREMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.";

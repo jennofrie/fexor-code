@@ -7,6 +7,14 @@ Claude Code snapshot version, currently `2.1.309`).
 
 ## [Unreleased]
 
+### Added — DeepSeek-backed web search for third-party launchers
+
+- `WebSearch` now uses DeepSeek's native `/v1/tools/search` API whenever `ANTHROPIC_BASE_URL` points at `api.deepseek.com`. It reuses the launcher's existing DeepSeek key; no second credential is required.
+- Results are ranked by `rerank_score`, authority, and date; URLs are canonicalized and deduped; domain allow/block filters apply both as query operators and as local host filters.
+- Results include snippets and summaries, bounded to 1,200 characters per detail, 12,000 characters per search, and 8 results by default. A 10-minute LRU cache avoids duplicate calls, and 408/429/5xx responses retry three times with bounded backoff.
+- The per-session search budget now refills at 100 searches/hour (upstream 2.1.290 behavior). `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION` and `CLAUDE_CODE_WEB_SEARCH_REFILLS_PER_HOUR` control it. The Anthropic server-side search path is unchanged.
+- New file: `src/tools/WebSearchTool/deepseekSearch.ts`; updated `WebSearchTool.ts`, `prompt.ts`, and `UI.tsx`.
+
 ### Changed — DeepSeek launchers: V4.1-Flash 1017 and V4 Pro (live IDs, max effort)
 
 - Live IDs only: default `deepseek-flash[1m]` (V4.1-Flash 1017) and `deepseek-v4-pro[1m]` via `--model deepseek-v4-pro` / `DEEPSEEK_VARIANT=pro`. Haiku/subagents stay `deepseek-flash`.
