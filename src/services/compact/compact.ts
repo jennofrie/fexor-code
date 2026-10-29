@@ -118,6 +118,7 @@ import {
   getCompactUserSummaryMessage,
   getPartialCompactPrompt,
 } from "./prompt.js";
+import { stripDenseTextFromMessages } from "./denseText.js";
 
 export const POST_COMPACT_MAX_FILES_TO_RESTORE = 5;
 export const POST_COMPACT_TOKEN_BUDGET = 50_000;
@@ -465,10 +466,19 @@ export async function compactConversation(
       // CC-1180: compact request itself hit prompt-too-long. Truncate the
       // oldest API-round groups and retry rather than leaving the user stuck.
       ptlAttempts++;
-      const truncated =
-        ptlAttempts <= MAX_PTL_RETRIES
-          ? truncateHeadForPTLRetry(messagesToSummarize, summaryResponse)
-          : null;
+      let truncated: Message[] | null = null;
+      if (ptlAttempts === 1) {
+        const denser = stripDenseTextFromMessages(messagesToSummarize);
+        if (denser !== messagesToSummarize) {
+          truncated = denser;
+        }
+      }
+      if (!truncated && ptlAttempts <= MAX_PTL_RETRIES) {
+        truncated = truncateHeadForPTLRetry(
+          messagesToSummarize,
+          summaryResponse
+        );
+      }
       if (!truncated) {
         logEvent("tengu_compact_failed", {
           reason:
@@ -493,6 +503,20 @@ export async function compactConversation(
       };
     }
 
+    if (!summary) {
+      logForDebugging(
+        "Compact returned no summary text; retrying the summary request once"
+      );
+      summaryResponse = await streamCompactSummary({
+        messages: messagesToSummarize,
+        summaryRequest,
+        appState,
+        context,
+        preCompactTokenCount,
+        cacheSafeParams: retryCacheSafeParams,
+      });
+      summary = getAssistantMessageText(summaryResponse);
+    }
     if (!summary) {
       logForDebugging(
         `Compact failed: no summary text in response. Response: ${jsonStringify(summaryResponse)}`,
@@ -882,10 +906,16 @@ export async function partialCompactConversation(
       if (!summary?.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE)) break;
 
       ptlAttempts++;
-      const truncated =
-        ptlAttempts <= MAX_PTL_RETRIES
-          ? truncateHeadForPTLRetry(apiMessages, summaryResponse)
-          : null;
+      let truncated: Message[] | null = null;
+      if (ptlAttempts === 1) {
+        const denser = stripDenseTextFromMessages(apiMessages);
+        if (denser !== apiMessages) {
+          truncated = denser;
+        }
+      }
+      if (!truncated && ptlAttempts <= MAX_PTL_RETRIES) {
+        truncated = truncateHeadForPTLRetry(apiMessages, summaryResponse);
+      }
       if (!truncated) {
         logEvent("tengu_partial_compact_failed", {
           reason:
@@ -906,6 +936,20 @@ export async function partialCompactConversation(
         ...retryCacheSafeParams,
         forkContextMessages: truncated,
       };
+    }
+    if (!summary) {
+      logForDebugging(
+        "Partial compact returned no summary text; retrying the summary request once"
+      );
+      summaryResponse = await streamCompactSummary({
+        messages: apiMessages,
+        summaryRequest,
+        appState: context.getAppState(),
+        context,
+        preCompactTokenCount,
+        cacheSafeParams: retryCacheSafeParams,
+      });
+      summary = getAssistantMessageText(summaryResponse);
     }
     if (!summary) {
       logEvent("tengu_partial_compact_failed", {

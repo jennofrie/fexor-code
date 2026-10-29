@@ -1,4 +1,4 @@
-# Shared launch-time defaults for Fexor Code 2.1.309.
+# Shared launch-time defaults for Fexor Code 2.1.312.
 # Dot-source after provider-specific setup; existing values win.
 #
 # Never enable the server-side auto-mode classifier in a red-team launcher.

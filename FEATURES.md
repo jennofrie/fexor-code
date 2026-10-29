@@ -1,6 +1,6 @@
 # Feature Flags Audit
 
-Audit date: 2026-03-31 — last verified 2026-10-24 for Fexor 2.1.309
+Audit date: 2026-03-31 — last verified 2026-10-29 for Fexor 2.1.312
 
 This repository currently references 88 `feature('FLAG')` compile-time flags.
 I re-checked them by bundling the CLI once per flag on top of the current

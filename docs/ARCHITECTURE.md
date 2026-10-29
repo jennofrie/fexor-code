@@ -52,7 +52,7 @@ flowchart LR
 
 | Directory                                    | Purpose                                                                                                                                                  |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `services/`                                  | API clients (`api/claude.ts`, `withRetry`), OAuth/MCP, compaction (`autoCompact`, `microCompact`, `reactiveCompact`, `snipCompact`), analytics **stubs** |
+| `services/`                                  | API clients (`api/claude.ts`, `withRetry`, `effortSupport`), OAuth/MCP, compaction (`autoCompact`, `microCompact`, `reactiveCompact`, `snipCompact`, `sleepCompact`), analytics **stubs** |
 | `services/api/codex-fetch-adapter.ts`        | translates Anthropic Messages → OpenAI Responses for GPT/Codex                                                                                           |
 | `services/api/nvidia-chat-adapter.ts`        | translates Anthropic Messages ↔ NVIDIA Chat Completions and enforces GLM-5.2, DeepSeek V4-Pro/Flash, and MiniMax M3 limits/reasoning profiles            |
 | `tools/WebSearchTool/deepseekSearch.ts`      | DeepSeek Search API adapter: ranking, dedup, domain filters, LRU cache, retries                                                                          |
@@ -131,6 +131,12 @@ Because DeepSeek/Qwen are classified `firstParty`, they would otherwise receive
 Anthropic-proprietary betas and experimental tool-schema fields. The launchers
 set `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` (strips betas + `strict`/`defer_loading`/`eager_input_streaming`)
 and `DISABLE_INTERLEAVED_THINKING=1`. Base prompt caching (`cache_control`) is preserved.
+
+`services/api/effortSupport.ts` covers gateways that keep the beta but reject
+effort: a 400/422 for `output_config.effort` or `effort-2025-11-24` triggers one
+retry with both fields removed, and only a successful retry latches the model
+for the rest of the process. Rejected `output_config.format` / `task_budget`
+keys are not misclassified.
 
 ### GPT/Codex
 

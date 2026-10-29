@@ -140,6 +140,8 @@ import type { ThinkingConfig } from '../utils/thinking.js';
 import { gracefulShutdownSync } from '../utils/gracefulShutdown.js';
 import { handlePromptSubmit, type PromptInputHelpers } from '../utils/handlePromptSubmit.js';
 import { useQueueProcessor } from '../hooks/useQueueProcessor.js';
+import { useSleepCompaction } from '../hooks/useSleepCompaction.js';
+import { tokenCountWithEstimation } from '../utils/tokens.js';
 import { useMailboxBridge } from '../hooks/useMailboxBridge.js';
 import { queryCheckpoint, logQueryProfileReport } from '../utils/queryProfiler.js';
 import type { Message as MessageType, UserMessage, ProgressMessage, HookResultMessage, PartialCompactDirection } from '../types/message.js';
@@ -1184,6 +1186,10 @@ export function REPL({
   }, [setToolUseConfirmQueue]);
   const [messages, rawSetMessages] = useState<MessageType[]>(initialMessages ?? []);
   const messagesRef = useRef(messages);
+  const getSleepCompactContextTokens = useCallback(
+    () => tokenCountWithEstimation(messagesRef.current),
+    []
+  );
   // Stores the willowMode variant that was shown (or false if no hint shown).
   // Captured at hint_shown time so hint_converted telemetry reports the same
   // variant — the GrowthBook value shouldn't change mid-session, but reading
@@ -1491,6 +1497,20 @@ export function REPL({
   const skipIdleCheckRef = useRef(false);
   const lastQueryCompletionTimeRef = useRef(lastQueryCompletionTime);
   lastQueryCompletionTimeRef.current = lastQueryCompletionTime;
+
+  // Opt-in idle compaction (CLAUDE_CODE_SLEEP_COMPACT=1). Arms only when the
+  // REPL is genuinely idle: no query, no permission prompt, no local JSX UI,
+  // and an empty command queue.
+  useSleepCompaction({
+    isIdle:
+      !isLoading &&
+      !isWaitingForApproval &&
+      !isShowingLocalJSXCommand &&
+      getCommandQueueLength() === 0,
+    isStopping: abortController?.signal.aborted === true,
+    isPermissionPending: isWaitingForApproval,
+    getContextTokens: getSleepCompactContextTokens,
+  });
 
   // Aggregate tool result budget: per-conversation decision tracking.
   // When the GrowthBook flag is on, query.ts enforces the budget; when

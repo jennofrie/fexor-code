@@ -31,7 +31,10 @@ import { trySessionMemoryCompaction } from "./sessionMemoryCompact.js";
 const MAX_OUTPUT_TOKENS_FOR_SUMMARY = 20_000;
 
 // Returns the context window size minus the max output tokens for the model
-export function getEffectiveContextWindowSize(model: string): number {
+export function getEffectiveContextWindowSize(
+  model: string,
+  agentWindow?: number
+): number {
   const reservedTokensForSummary = Math.min(
     getMaxOutputTokensForModel(model),
     MAX_OUTPUT_TOKENS_FOR_SUMMARY
@@ -44,6 +47,15 @@ export function getEffectiveContextWindowSize(model: string): number {
     if (!isNaN(parsed) && parsed > 0) {
       contextWindow = Math.min(contextWindow, parsed);
     }
+  }
+
+  // Subagent autoCompactWindow may lower the parent window; it never raises it.
+  if (
+    typeof agentWindow === "number" &&
+    Number.isFinite(agentWindow) &&
+    agentWindow > 0
+  ) {
+    contextWindow = Math.min(contextWindow, agentWindow);
   }
 
   return contextWindow - reservedTokensForSummary;
@@ -80,8 +92,14 @@ export function shouldNotifyAutoCompactCircuitBreaker(
   );
 }
 
-export function getAutoCompactThreshold(model: string): number {
-  const effectiveContextWindow = getEffectiveContextWindowSize(model);
+export function getAutoCompactThreshold(
+  model: string,
+  agentWindow?: number
+): number {
+  const effectiveContextWindow = getEffectiveContextWindowSize(
+    model,
+    agentWindow
+  );
 
   const autocompactThreshold =
     effectiveContextWindow - AUTOCOMPACT_BUFFER_TOKENS;
@@ -103,7 +121,8 @@ export function getAutoCompactThreshold(model: string): number {
 
 export function calculateTokenWarningState(
   tokenUsage: number,
-  model: string
+  model: string,
+  agentWindow?: number
 ): {
   percentLeft: number;
   isAboveWarningThreshold: boolean;
@@ -111,10 +130,10 @@ export function calculateTokenWarningState(
   isAboveAutoCompactThreshold: boolean;
   isAtBlockingLimit: boolean;
 } {
-  const autoCompactThreshold = getAutoCompactThreshold(model);
+  const autoCompactThreshold = getAutoCompactThreshold(model, agentWindow);
   const threshold = isAutoCompactEnabled()
     ? autoCompactThreshold
-    : getEffectiveContextWindowSize(model);
+    : getEffectiveContextWindowSize(model, agentWindow);
 
   const percentLeft = Math.max(
     0,
@@ -130,7 +149,7 @@ export function calculateTokenWarningState(
   const isAboveAutoCompactThreshold =
     isAutoCompactEnabled() && tokenUsage >= autoCompactThreshold;
 
-  const actualContextWindow = getEffectiveContextWindowSize(model);
+  const actualContextWindow = getEffectiveContextWindowSize(model, agentWindow);
   const defaultBlockingLimit =
     actualContextWindow - MANUAL_COMPACT_BUFFER_TOKENS;
 
@@ -175,7 +194,8 @@ export async function shouldAutoCompact(
   // Snip removes messages but the surviving assistant's usage still reflects
   // pre-snip context, so tokenCountWithEstimation can't see the savings.
   // Subtract the rough-delta that snip already computed.
-  snipTokensFreed = 0
+  snipTokensFreed = 0,
+  agentWindow?: number
 ): Promise<boolean> {
   // Recursion guards. session_memory and compact are forked agents that
   // would deadlock.
@@ -234,8 +254,8 @@ export async function shouldAutoCompact(
   }
 
   const tokenCount = tokenCountWithEstimation(messages) - snipTokensFreed;
-  const threshold = getAutoCompactThreshold(model);
-  const effectiveWindow = getEffectiveContextWindowSize(model);
+  const threshold = getAutoCompactThreshold(model, agentWindow);
+  const effectiveWindow = getEffectiveContextWindowSize(model, agentWindow);
 
   logForDebugging(
     `autocompact: tokens=${tokenCount} threshold=${threshold} effectiveWindow=${effectiveWindow}${snipTokensFreed > 0 ? ` snipFreed=${snipTokensFreed}` : ""}`
@@ -243,7 +263,8 @@ export async function shouldAutoCompact(
 
   const { isAboveAutoCompactThreshold } = calculateTokenWarningState(
     tokenCount,
-    model
+    model,
+    agentWindow
   );
 
   return isAboveAutoCompactThreshold;
@@ -276,11 +297,13 @@ export async function autoCompactIfNeeded(
   }
 
   const model = toolUseContext.options.mainLoopModel;
+  const agentWindow = toolUseContext.autoCompactWindow;
   const shouldCompact = await shouldAutoCompact(
     messages,
     model,
     querySource,
-    snipTokensFreed
+    snipTokensFreed,
+    agentWindow
   );
 
   if (!shouldCompact) {
@@ -291,7 +314,7 @@ export async function autoCompactIfNeeded(
     isRecompactionInChain: tracking?.compacted === true,
     turnsSincePreviousCompact: tracking?.turnCounter ?? -1,
     previousCompactTurnId: tracking?.turnId,
-    autoCompactThreshold: getAutoCompactThreshold(model),
+    autoCompactThreshold: getAutoCompactThreshold(model, agentWindow),
     querySource,
   };
 

@@ -114,6 +114,11 @@ import {
   APIUserAbortError,
 } from '@anthropic-ai/sdk/error'
 import {
+  isEffortUnsupportedError,
+  isEffortUnsupportedForModel,
+  markEffortUnsupportedForModel,
+} from './effortSupport.js'
+import {
   getAfkModeHeaderLatched,
   getCacheEditingHeaderLatched,
   getFastModeHeaderLatched,
@@ -445,7 +450,11 @@ function configureEffortParams(
   betas: string[],
   model: string,
 ): void {
-  if (!modelSupportsEffort(model) || 'effort' in outputConfig) {
+  if (
+    !modelSupportsEffort(model) ||
+    isEffortUnsupportedForModel(model) ||
+    'effort' in outputConfig
+  ) {
     return
   }
 
@@ -1536,7 +1545,10 @@ async function* queryModel(
   // were dynamically added, so we can log and send it to telemetry.
   let lastRequestBetas: string[] | undefined
 
-  const paramsFromContext = (retryContext: RetryContext) => {
+  const paramsFromContext = (
+    retryContext: RetryContext,
+    stripEffort = false,
+  ) => {
     const betasParams = [...betas]
 
     // Append 1M beta dynamically for the Sonnet 1M experiment.
@@ -1560,6 +1572,8 @@ async function* queryModel(
     const outputConfig: BetaOutputConfig = {
       ...((extraBodyParams.output_config as BetaOutputConfig) ?? {}),
     }
+    const stripEffortForRequest =
+      stripEffort || isEffortUnsupportedForModel(options.model)
 
     configureEffortParams(
       effort,
@@ -1568,6 +1582,16 @@ async function* queryModel(
       betasParams,
       options.model,
     )
+
+    // A gateway that rejected effort keeps that rejection for the process.
+    // Strip effort even when it arrived through extraBodyParams.
+    if (stripEffortForRequest) {
+      delete outputConfig.effort
+      const effortHeaderIndex = betasParams.indexOf(EFFORT_BETA_HEADER)
+      if (effortHeaderIndex !== -1) {
+        betasParams.splice(effortHeaderIndex, 1)
+      }
+    }
 
     configureTaskBudgetParams(
       options.taskBudget,
@@ -1700,13 +1724,36 @@ async function* queryModel(
     const temperature = requiresDefaultSampling
       ? undefined
       : requestedTemperature
-    const sanitizedExtraBodyParams = requiresDefaultSampling
+    let sanitizedExtraBodyParams = requiresDefaultSampling
       ? { ...extraBodyParams }
       : extraBodyParams
     if (requiresDefaultSampling) {
       delete sanitizedExtraBodyParams.temperature
       delete sanitizedExtraBodyParams.top_p
       delete sanitizedExtraBodyParams.top_k
+    }
+
+    // The returned object spreads this after configureEffortParams, so an
+    // extraBodyParams.output_config would otherwise reintroduce a rejected
+    // effort field when outputConfig has no remaining keys.
+    if (stripEffortForRequest) {
+      const extraOutputConfig = sanitizedExtraBodyParams.output_config
+      if (
+        extraOutputConfig !== null &&
+        typeof extraOutputConfig === 'object' &&
+        !Array.isArray(extraOutputConfig)
+      ) {
+        const { effort: _effort, ...rest } = extraOutputConfig as Record<
+          string,
+          unknown
+        >
+        sanitizedExtraBodyParams = { ...sanitizedExtraBodyParams }
+        if (Object.keys(rest).length > 0) {
+          sanitizedExtraBodyParams.output_config = rest
+        } else {
+          delete sanitizedExtraBodyParams.output_config
+        }
+      }
     }
 
     lastRequestBetas = betasParams
@@ -1833,18 +1880,38 @@ async function* queryModel(
         // Use raw stream instead of BetaMessageStream to avoid O(n²) partial JSON parsing
         // BetaMessageStream calls partialParse() on every input_json_delta, which we don't need
         // since we handle tool input accumulation ourselves
-        // biome-ignore lint/plugin: main conversation loop handles attribution separately
-        const result = await anthropic.beta.messages
-          .create(
-            { ...params, stream: true },
-            {
-              signal,
-              ...(clientRequestId && {
-                headers: { [CLIENT_REQUEST_ID_HEADER]: clientRequestId },
-              }),
-            },
-          )
-          .withResponse()
+        const requestOptions = {
+          signal,
+          ...(clientRequestId && {
+            headers: { [CLIENT_REQUEST_ID_HEADER]: clientRequestId },
+          }),
+        }
+        const sendRequest = (requestParams: BetaMessageStreamParams) =>
+          // biome-ignore lint/plugin: main conversation loop handles attribution separately
+          anthropic.beta.messages
+            .create({ ...requestParams, stream: true }, requestOptions)
+            .withResponse()
+
+        let result
+        try {
+          result = await sendRequest(params)
+        } catch (error) {
+          if (
+            !isEffortUnsupportedForModel(options.model) &&
+            isEffortUnsupportedError(error)
+          ) {
+            logForDebugging(
+              `[effort] ${options.model} rejected effort controls; retrying without them for the rest of this process`,
+              { level: 'warn' },
+            )
+            // Retry before latching. If the retry fails for an unrelated
+            // reason, leave the latch clear so a later request can retry.
+            result = await sendRequest(paramsFromContext(context, true))
+            markEffortUnsupportedForModel(options.model)
+          } else {
+            throw error
+          }
+        }
         queryCheckpoint('query_response_headers_received')
         streamRequestId = result.request_id
         streamResponse = result.response

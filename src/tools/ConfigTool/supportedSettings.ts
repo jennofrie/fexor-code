@@ -56,6 +56,11 @@ export const SUPPORTED_SETTINGS: Record<string, SettingConfig> = {
     type: 'boolean',
     description: 'Auto-compact when context is full',
   },
+  idleCompaction: {
+    source: 'global',
+    type: 'boolean',
+    description: 'Compact after a warm-cache idle gap',
+  },
   autoMemoryEnabled: {
     source: 'settings',
     type: 'boolean',

@@ -31,6 +31,15 @@ function isGlmMaxEffortModel(model: string): boolean {
   return normalized.includes("glm-5.2") || normalized.includes("glm-5.3");
 }
 
+// DeepSeek exposes a version-prefixed Pro ID (deepseek-v4-pro) and a
+// version-less Flash ID (deepseek-flash); both accept reasoning_effort: max.
+function isDeepSeekMaxEffortModel(model: string): boolean {
+  const normalized = model.toLowerCase();
+  return (
+    normalized.includes("deepseek-v4") || normalized.includes("deepseek-flash")
+  );
+}
+
 // @[MODEL LAUNCH]: Add the new model to the allowlist if it supports the effort parameter.
 export function modelSupportsEffort(model: string): boolean {
   const m = model.toLowerCase();
@@ -85,12 +94,7 @@ export function modelSupportsMaxEffort(model: string): boolean {
   if (isGlmMaxEffortModel(model)) {
     return true;
   }
-  // DeepSeek exposes a version-prefixed Pro ID (deepseek-v4-pro) and a
-  // version-less Flash ID (deepseek-flash); both accept reasoning_effort: max.
-  if (
-    model.toLowerCase().startsWith("deepseek-v4") ||
-    model.toLowerCase().startsWith("deepseek-flash")
-  ) {
+  if (isDeepSeekMaxEffortModel(model)) {
     return true;
   }
   if (
@@ -410,6 +414,13 @@ export function getDefaultEffortForModel(
   }
 
   if (isGlmMaxEffortModel(model)) {
+    return "max";
+  }
+
+  // DeepSeek V4.1 Flash / V4 Pro accept max reasoning. Default to max so a
+  // bare launch matches the DeepSeek launchers' intent instead of falling back
+  // to the API's `high` default.
+  if (isDeepSeekMaxEffortModel(model)) {
     return "max";
   }
 

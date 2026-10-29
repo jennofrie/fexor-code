@@ -67,6 +67,27 @@ describe("Claude effort defaults", () => {
     expect(resolveAppliedEffort("deepseek-v4-pro", "max")).toBe("max");
   });
 
+  test("supports max effort on DeepSeek-V4.1-Flash 1017 wire IDs", () => {
+    expect(modelSupportsEffort("deepseek-flash")).toBe(true);
+    expect(modelSupportsMaxEffort("deepseek-flash")).toBe(true);
+    expect(resolveAppliedEffort("deepseek-flash", "max")).toBe("max");
+    expect(modelSupportsMaxEffort("deepseek-flash[1m]")).toBe(true);
+  });
+
+  test("defaults DeepSeek V4.1 Flash to max effort", () => {
+    const model = "deepseek-flash[1m]";
+    expect(getDefaultEffortForModel(model)).toBe("max");
+    expect(resolveAppliedEffort(model, undefined)).toBe("max");
+    // Explicit lower session choices still win over the model default.
+    expect(resolveAppliedEffort(model, "medium")).toBe("medium");
+  });
+
+  test("defaults DeepSeek V4 Pro to max effort", () => {
+    const model = "deepseek-v4-pro[1m]";
+    expect(getDefaultEffortForModel(model)).toBe("max");
+    expect(resolveAppliedEffort(model, undefined)).toBe("max");
+  });
+
   test("supports max effort on GLM 5.2 launch models", () => {
     expect(modelSupportsEffort("glm-5.2[1m]")).toBe(true);
     expect(modelSupportsMaxEffort("glm-5.2[1m]")).toBe(true);

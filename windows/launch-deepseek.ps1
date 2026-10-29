@@ -1,9 +1,10 @@
 #Requires -Version 5.1
 # fexor-code isolated launcher for Windows — DeepSeek-V4.1-Flash 1017 / V4 Pro.
-# Live API IDs (verified 2026-10-24): deepseek-flash, deepseek-v4-pro. Both effort max.
-# 1017 (2026-10-17) is a drop-in update behind the same deepseek-flash ID:
+# Live API IDs (verified 2026-10-29): deepseek-flash (V4.1-Flash 1017),
+# deepseek-v4-pro. Both effort max. 1017 is a drop-in behind deepseek-flash:
 # API parameters and pricing are unchanged; context is 1,048,576 tokens.
-# Retired deepseek-v4-flash aliases are not used.
+# Retired deepseek-v4-flash aliases still route to 1017 at Flash rates.
+# Fexor binary reports 2.1.312.
 #
 # Usage:
 #   .\launch-deepseek.ps1                          # V4.1-Flash 1017 1M, effort max

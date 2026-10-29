@@ -3,9 +3,47 @@
 All notable changes to **Fexor Code** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project does not yet follow semantic versioning (it tracks the upstream
-Claude Code snapshot version, currently `2.1.309`).
+Claude Code snapshot version, currently `2.1.312`).
 
 ## [Unreleased]
+
+### Changed — repository consolidation (2026-10-29)
+
+- The primary `Desktop/Github/fexor-code` checkout is now the single live tree on `main`; the legacy pre-2.1.310 WIP is preserved on the local `backup/legacy-wip-20261029` branch and is not part of `main`.
+
+### Changed — version
+
+- Package and CLI version now report `2.1.312`, matching the installed official Claude Code. `cli-dev` rebuilt as `2.1.312-dev`.
+
+### Changed — DeepSeek-V4.1-Flash 1017 live IDs (2026-10-29)
+
+- Re-verified `GET https://api.deepseek.com/models`: live IDs are `deepseek-flash` and `deepseek-v4-pro` only. `deepseek-v4-flash` is no longer listed.
+- Default launcher model stays `deepseek-flash[1m]` labeled **DeepSeek-V4.1-Flash 1017**, compact `786432`, client budget `1048576`, effort `max`.
+
+### Added — 2.1.310–2.1.312 harness ports (token/context)
+
+- After a prompt-too-long compact failure, drop dense tool-result blobs (base64, data URIs, large SVG) before peeling history groups.
+- If a compaction reply has no summary, retry the summary request once before replacing history.
+- Standard-context “Extra usage is required for 1M context” errors compact-and-continue instead of killing the turn.
+- Time-based microcompact is on by default (clears old tool results after a 60-minute gap). Works for third-party models; does not use Anthropic cache_edits.
+- Subagent `autoCompactWindow` frontmatter / `--agents` JSON field lowers the parent auto-compact window and never raises it.
+- Unrecognized / custom model IDs use a short system prompt. Set `CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT=0` to keep the full prompt.
+- Non-interactive MCP elicitation timeouts tell the model no answer came and not to repeat the call.
+
+### Added — Idle (“sleep”) compaction (2.1.312)
+
+- Opt-in `CLAUDE_CODE_SLEEP_COMPACT=1` ports the official `SleepCompactor`: arm at 90% of the prompt-cache TTL, apply the turn-end idle-gap clamp only on remote hosts or when explicitly configured (60–210s, default 150s), skip when the cache lapsed, and enqueue `/compact` only above the context floor (150K default, 60K minimum).
+- New `idleCompaction` setting (default on) and `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` / `CLAUDE_CODE_SLEEP_COMPACT_AFTER_MS` / `CLAUDE_CODE_SLEEP_COMPACT_CACHE_TTL_MS` controls. No new turn is created when the user is busy, at a permission prompt, or has queued input.
+- New files: `src/services/compact/sleepCompact.ts`, `src/hooks/useSleepCompaction.ts`; wired in `src/screens/REPL.tsx`.
+
+### Fixed — Gateway effort-control rejection (2.1.310)
+
+- A 400/422 rejection of `output_config.effort` or the `effort-2025-11-24` beta now retries once without both fields, then latches the model for the rest of the process so later requests do not resend them. This unblocks third-party Anthropic-compatible gateways.
+- New `src/services/api/effortSupport.ts`; `configureEffortParams` and the streaming request path in `src/services/api/claude.ts` honor the latch.
+
+### Added — REA verification of official 2.1.312
+
+- Extracted the official Bun standalone (`~/.local/share/claude/versions/2.1.312`) into 2,679 source modules with `unbunjs` (REA has no Bun-standalone decoder), then ran REA `analyze-javascript-application` on the sleep-compaction module set: 4,713 facts examined, complete within scope, and a module trace with 7,301 reachable nodes. Full-tree analysis exceeded REA’s 300s per-source deadline, so the evidence is scoped to the selected modules.
 
 ### Added — DeepSeek-backed web search for third-party launchers
 

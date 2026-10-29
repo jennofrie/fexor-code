@@ -41,6 +41,7 @@ import { logError } from "./utils/log.js";
 import {
   PROMPT_TOO_LONG_ERROR_MESSAGE,
   isPromptTooLongMessage,
+  isCompactAndContinueError,
 } from "./services/api/errors.js";
 import { logAntError, logForDebugging } from "./utils/debug.js";
 import {
@@ -652,7 +653,8 @@ async function* queryLoop(
     ) {
       const { isAtBlockingLimit } = calculateTokenWarningState(
         tokenCountWithEstimation(messagesForQuery) - snipTokensFreed,
-        toolUseContext.options.mainLoopModel
+        toolUseContext.options.mainLoopModel,
+        toolUseContext.autoCompactWindow
       );
       if (isAtBlockingLimit) {
         yield createAssistantAPIErrorMessage({
@@ -827,7 +829,11 @@ async function* queryLoop(
                 withheld = true;
               }
             }
-            if (reactiveCompact?.isWithheldPromptTooLong(message)) {
+            if (
+              reactiveCompact?.isWithheldPromptTooLong(message) ||
+              (message.type === "assistant" &&
+                isCompactAndContinueError(message))
+            ) {
               withheld = true;
             }
             if (
@@ -1088,7 +1094,7 @@ async function* queryLoop(
       const isWithheld413 =
         lastMessage?.type === "assistant" &&
         lastMessage.isApiErrorMessage &&
-        isPromptTooLongMessage(lastMessage);
+        isCompactAndContinueError(lastMessage);
       // Media-size rejections (image/PDF/many-image) are recoverable via
       // reactive compact's strip-retry. Unlike PTL, media errors skip the
       // collapse drain — collapse doesn't strip images. mediaRecoveryEnabled

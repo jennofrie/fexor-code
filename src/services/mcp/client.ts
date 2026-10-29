@@ -40,7 +40,11 @@ import mapValues from 'lodash-es/mapValues.js'
 import memoize from 'lodash-es/memoize.js'
 import zipObject from 'lodash-es/zipObject.js'
 import pMap from 'p-map'
-import { getOriginalCwd, getSessionId } from '../../bootstrap/state.js'
+import {
+  getIsNonInteractiveSession,
+  getOriginalCwd,
+  getSessionId,
+} from '../../bootstrap/state.js'
 import type { Command } from '../../commands.js'
 import { getOauthConfig } from '../../constants/oauth.js'
 import { PRODUCT_URL } from '../../constants/product.js'
@@ -2946,7 +2950,18 @@ export async function callMCPToolWithUrlElicitationRetry({
         let userResult: ElicitResult
         if (handleElicitation) {
           // Print/SDK mode: delegate to structuredIO which sends a control request
-          userResult = await handleElicitation(serverName, elicitation, signal)
+          try {
+            userResult = await handleElicitation(serverName, elicitation, signal)
+          } catch (error) {
+            const timedOut =
+              error instanceof Error && /timed?\s*out/i.test(error.message)
+            if (timedOut || signal.aborted) {
+              return {
+                content: `MCP tool "${tool}" timed out while waiting for elicitation. No answer was received. Do not repeat this tool call.`,
+              }
+            }
+            throw error
+          }
         } else {
           // REPL mode: queue for ElicitationDialog with two-phase consent/waiting flow
           const waitingState: ElicitationWaitingState = {
@@ -3077,7 +3092,9 @@ async function callMCPTool({
         (reject, name, tool, timeoutMs) => {
           reject(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `MCP server "${name}" tool "${tool}" timed out after ${Math.floor(timeoutMs / 1000)}s`,
+              getIsNonInteractiveSession()
+                ? `MCP server "${name}" tool "${tool}" timed out after ${Math.floor(timeoutMs / 1000)}s. If this call was waiting on elicitation, no answer was received. Do not repeat this tool call.`
+                : `MCP server "${name}" tool "${tool}" timed out after ${Math.floor(timeoutMs / 1000)}s`,
               'MCP tool timeout',
             ),
           )

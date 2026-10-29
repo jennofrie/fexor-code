@@ -4,8 +4,8 @@ import type { CacheSafeParams } from '../../utils/forkedAgent.js'
 import { logError } from '../../utils/log.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../analytics/growthbook.js'
 import {
+  isCompactAndContinueError,
   isMediaSizeErrorMessage,
-  isPromptTooLongMessage,
 } from '../api/errors.js'
 import {
   type CompactionResult,
@@ -45,7 +45,7 @@ export function isWithheldPromptTooLong(
   return (
     isReactiveCompactEnabled() &&
     msg?.type === 'assistant' &&
-    isPromptTooLongMessage(msg)
+    isCompactAndContinueError(msg)
   )
 }
 

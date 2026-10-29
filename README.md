@@ -13,7 +13,7 @@
 [![Language](https://img.shields.io/badge/TypeScript-5.x-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-source--available-f59e0b?style=for-the-badge)](#-license)
 
-[![Version](https://img.shields.io/badge/version-2.1.309-22c55e?style=flat-square)](#-21309-integration--2026-10-24)
+[![Version](https://img.shields.io/badge/version-2.1.312-22c55e?style=flat-square)](#-21312-integration--2026-10-29)
 [![Feature flags](https://img.shields.io/badge/feature_flags-5_default_%2F_49_dev--full_%2F_88_total-8b5cf6?style=flat-square)](FEATURES.md)
 [![Providers](https://img.shields.io/badge/providers-10_routed-0ea5e9?style=flat-square)](#-model-providers)
 [![Context](https://img.shields.io/badge/context-up_to_1M_tokens-ec4899?style=flat-square)](#-model-providers)
@@ -42,7 +42,20 @@ A clean, buildable fork of Anthropic's [Claude Code](https://docs.anthropic.com/
 
 ---
 
-## 🆕 2.1.309 integration — 2026-10-24
+## 🆕 2.1.312 integration — 2026-10-29
+
+Fexor now reports **2.1.312**, matching the installed official Claude Code. Token/context harness ports from upstream 2.1.310–2.1.312 are in this tree (dense-text PTL retry, compact-and-continue on extra-usage 1M, empty-summary retry, subagent `autoCompactWindow` min, short prompt for unknown model IDs, MCP elicitation no-repeat, time-based microcompact on by default). Denial-path changes stay out.
+
+Two additional harness-efficiency features ship in this pass:
+
+- **Idle (“sleep”) compaction** — opt-in `CLAUDE_CODE_SLEEP_COMPACT=1` arms at 90% of the prompt-cache TTL, waits for a genuinely idle session, and enqueues `/compact` only above the context floor (150K default, 60K minimum). Tune with `CLAUDE_CODE_SLEEP_COMPACT_AFTER_MS`, `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, and `CLAUDE_CODE_SLEEP_COMPACT_CACHE_TTL_MS`; disable with the `idleCompaction` setting.
+- **Gateway effort fallback** — a 400/422 rejection of `output_config.effort` or the `effort-2025-11-24` beta retries once without both fields, then latches the model for the rest of the process. This keeps third-party Anthropic-compatible gateways usable when they implement the core Messages API but reject Anthropic-only effort controls.
+
+DeepSeek default remains **V4.1-Flash 1017** (`deepseek-flash[1m]`). Official docs still serve 1017 behind that live ID.
+
+---
+
+## 2.1.309 integration — 2026-10-24
 
 Fexor now reports **2.1.309**. The upstream delta was reconstructed from the installed 2.1.309 binary with REA: 133 plaintext JS source modules (28 MB), 179 releases through 2.1.309, and 6,287 changelog entries. High-value bounded-context and observability changes were ported; denial-path changes were rejected to preserve authorized red-team workflows.
 

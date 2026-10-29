@@ -45,7 +45,7 @@ import {
   isScratchpadEnabled,
   getScratchpadDir,
 } from "../utils/permissions/filesystem.js";
-import { isEnvTruthy } from "../utils/envUtils.js";
+import { isEnvDefinedFalsy, isEnvTruthy } from "../utils/envUtils.js";
 import { isReplModeEnabled } from "../tools/REPLTool/constants.js";
 import { feature } from "bun:bundle";
 import { shouldUseGlobalCacheScope } from "../utils/betas.js";
@@ -442,6 +442,32 @@ function getSimpleToneAndStyleSection(): string {
   return [`# Tone and style`, ...prependBullets(items)].join(`\n`);
 }
 
+function shouldUseShortSystemPrompt(model: string): boolean {
+  if (isEnvDefinedFalsy(process.env.CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT)) {
+    return false;
+  }
+  if (isEnvTruthy(process.env.CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT)) {
+    return true;
+  }
+  const canonical = getCanonicalName(model).toLowerCase();
+  return !(
+    canonical.includes("claude") ||
+    canonical.includes("sonnet") ||
+    canonical.includes("opus") ||
+    canonical.includes("haiku") ||
+    canonical.includes("deepseek") ||
+    canonical.includes("glm") ||
+    canonical.includes("qwen") ||
+    canonical.includes("kimi") ||
+    canonical.includes("grok") ||
+    canonical.includes("fugu") ||
+    canonical.includes("gpt-") ||
+    canonical.includes("o1") ||
+    canonical.includes("o3") ||
+    canonical.includes("o4")
+  );
+}
+
 export async function getSystemPrompt(
   tools: Tools,
   model: string,
@@ -451,6 +477,11 @@ export async function getSystemPrompt(
   if (isEnvTruthy(process.env.CLAUDE_CODE_SIMPLE)) {
     return [
       `You are Claude Code, Anthropic's official CLI for Claude.\n\nCWD: ${getCwd()}\nDate: ${getSessionStartDate()}`,
+    ];
+  }
+  if (shouldUseShortSystemPrompt(model)) {
+    return [
+      `You are a coding agent CLI.\n\nCWD: ${getCwd()}\nDate: ${getSessionStartDate()}`,
     ];
   }
 

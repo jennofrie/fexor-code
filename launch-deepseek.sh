@@ -2,11 +2,13 @@
 # fexor-code isolated launcher — DeepSeek-V4.1-Flash 1017 / V4 Pro, effort max
 # https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code
 #
-# Live API IDs (verified 2026-10-24): deepseek-flash, deepseek-v4-pro.
-# 1017 (2026-10-17) is a drop-in update behind the same deepseek-flash ID:
-# API parameters and pricing are unchanged; context is 1,048,576 tokens.
-# Retired names (deepseek-v4-flash, deepseek-v4-flash-vision-exp) are not used.
+# Live API IDs (verified 2026-10-29 against api-docs.deepseek.com):
+#   deepseek-flash     -> DeepSeek-V4.1-Flash 1017 (drop-in; same params/pricing)
+#   deepseek-v4-pro    -> DeepSeek V4 Pro
+# Context is 1,048,576 tokens. Retired names (deepseek-v4-flash,
+# deepseek-v4-flash-vision-exp) still route to 1017 at Flash rates.
 # There is no published deepseek-v4.1-pro ID; Pro is deepseek-v4-pro.
+# Fexor binary reports 2.1.312 (official Claude Code we track).
 #
 # Default (official Claude Code mapping):
 #   main/opus/sonnet = deepseek-flash[1m]
@@ -49,6 +51,7 @@ has_arg() {
 }
 
 # flash | pro. Wire IDs only: deepseek-flash and deepseek-v4-pro.
+# 1017 / v4.1-flash / retired v4-flash aliases all select Flash.
 selected_family() {
   local raw="${DEEPSEEK_MODEL:-${DEEPSEEK_VARIANT:-flash}}"
   local i=1
@@ -81,9 +84,24 @@ normalize_deepseek_thinking() {
 
 if [[ -f "$SCRIPT_DIR/.env.deepseek" ]]; then
   source "$SCRIPT_DIR/.env.deepseek"
+elif [[ -f "$SCRIPT_DIR/../fexor-code/.env.deepseek" ]]; then
+  source "$SCRIPT_DIR/../fexor-code/.env.deepseek"
+fi
+if [[ -z "${ANTHROPIC_AUTH_TOKEN:-}" && -z "${DEEPSEEK_API_KEY:-}" ]]; then
+  _ds_keyfile="${DEEPSEEK_API_KEY_FILE:-$HOME/.config/fexor-code/deepseek_api_key}"
+  if [[ -f "$_ds_keyfile" && ! -L "$_ds_keyfile" ]]; then
+    _ds_mode="$(stat -c '%a' "$_ds_keyfile" 2>/dev/null || true)"
+    if [[ "$_ds_mode" == "600" ]]; then
+      ANTHROPIC_AUTH_TOKEN="$(head -n1 "$_ds_keyfile" | tr -d '[:space:]')"
+    fi
+  fi
+fi
+if [[ -z "${ANTHROPIC_AUTH_TOKEN:-}" && -n "${DEEPSEEK_API_KEY:-}" ]]; then
+  ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY"
 fi
 export ANTHROPIC_AUTH_TOKEN
 export ANTHROPIC_BASE_URL="https://api.deepseek.com/anthropic"
+unset ANTHROPIC_API_KEY
 
 FAMILY="$(selected_family "$@")"
 if [[ "$FAMILY" == pro ]]; then
@@ -200,4 +218,18 @@ print -r -- "[launch-deepseek] model=$SELECTED_MAIN  effort=${CLAUDE_CODE_EFFORT
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/scripts/fexor-launcher-env.inc.sh"
 
-exec "$SCRIPT_DIR/cli-dev" "${args[@]}" "${forwarded_args[@]}"
+resolve_fexor_bin() {
+  if [[ -x "$SCRIPT_DIR/cli-dev" ]]; then
+    print -r -- "$SCRIPT_DIR/cli-dev"
+  elif command -v claude >/dev/null 2>&1; then
+    print -r -- "$(command -v claude)"
+  else
+    print -r -- "[launch-deepseek] ERROR: no $SCRIPT_DIR/cli-dev and no claude on PATH." >&2
+    print -r -- "  Rebuild with: bun run build:dev:full" >&2
+    exit 1
+  fi
+}
+FEXOR_BIN="$(resolve_fexor_bin)"
+print -r -- "[launch-deepseek] bin=$FEXOR_BIN  $($FEXOR_BIN --version 2>/dev/null | head -1)"
+
+exec "$FEXOR_BIN" "${args[@]}" "${forwarded_args[@]}"

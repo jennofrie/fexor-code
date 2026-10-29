@@ -9,7 +9,7 @@ For humans, start with [README.md](README.md).
 CLI, reconstructed from the publicly-exposed source snapshot. Telemetry is
 stripped, prompt-level guardrails removed, and experimental feature flags are
 unlocked — including **13 flags reconstructed** from missing source files.
-Tracks upstream **2.1.309** (2026-10-24) with bounded-context ports and
+Tracks upstream **2.1.312** (2026-10-29) with bounded-context ports and
 red-team-safe launcher defaults. See [README.md](README.md),
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and
 [docs/UPSTREAM-2.1.309-DELTA.md](docs/UPSTREAM-2.1.309-DELTA.md).

@@ -28,7 +28,10 @@ export type TimeBasedMCConfig = {
 }
 
 const TIME_BASED_MC_CONFIG_DEFAULTS: TimeBasedMCConfig = {
-  enabled: false,
+  // Fexor: GrowthBook is stubbed off, so this default is the live switch.
+  // Time-based MC clears old tool results after a cache-TTL-sized gap and
+  // does not depend on Anthropic cache_edits — it works for third-party models.
+  enabled: true,
   gapThresholdMinutes: 60,
   keepRecent: 5,
 }

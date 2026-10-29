@@ -90,4 +90,15 @@ describe("DeepSeek V4 output windows", () => {
       upperLimit: 384_000,
     });
   });
+
+  test("allows the 384K output maximum for V4.1-Flash 1017 wire IDs", () => {
+    expect(getModelMaxOutputTokens("deepseek-flash")).toEqual({
+      default: 64_000,
+      upperLimit: 384_000,
+    });
+    expect(getModelMaxOutputTokens("deepseek-flash[1m]")).toEqual({
+      default: 64_000,
+      upperLimit: 384_000,
+    });
+  });
 });

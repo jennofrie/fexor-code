@@ -1,6 +1,6 @@
 {
   "name": "fexor-code",
-  "version": "2.1.309",
+  "version": "2.1.312",
   "private": true,
   "description": "Reconstructed Bun CLI workspace for the Claude Code source snapshot.",
   "type": "module",

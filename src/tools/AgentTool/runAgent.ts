@@ -736,6 +736,7 @@ async function* runAgentImpl({
       : undefined,
     verificationIsolation,
     disableExternalHooks: agentDefinition.disableSubagentHooks === true,
+    autoCompactWindow: agentDefinition.autoCompactWindow,
   });
 
   // Preserve tool use results for subagents with viewable transcripts (in-process teammates)

@@ -264,6 +264,8 @@ export type SubagentContextOverrides = {
   agentId?: AgentId;
   /** Override the agentType (for subagents with a specific type) */
   agentType?: string;
+  /** Subagent auto-compact window in tokens. Mins with the parent; never raises it. */
+  autoCompactWindow?: number;
   /** Override the messages array */
   messages?: Message[];
   /** Override the readFileState (e.g., fresh cache instead of clone) */
@@ -458,6 +460,12 @@ export function createSubagentContext(
     // Generate new agentId for subagents (each subagent should have its own ID)
     agentId: overrides?.agentId ?? createAgentId(),
     agentType: overrides?.agentType,
+    autoCompactWindow: (() => {
+      const parentW = parentContext.autoCompactWindow;
+      const childW = overrides?.autoCompactWindow;
+      if (childW && parentW) return Math.min(childW, parentW);
+      return childW ?? parentW;
+    })(),
 
     // Create new query tracking chain for subagent with incremented depth
     queryTracking: {

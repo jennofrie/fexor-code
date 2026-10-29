@@ -60,6 +60,8 @@ export function startsWithApiErrorPrefix(text: string): boolean {
   )
 }
 export const PROMPT_TOO_LONG_ERROR_MESSAGE = 'Prompt is too long'
+export const EXTRA_USAGE_1M_CONTEXT_MARKER =
+  'Extra usage is required for 1M context'
 
 export function isPromptTooLongMessage(msg: AssistantMessage): boolean {
   if (!msg.isApiErrorMessage) {
@@ -74,6 +76,29 @@ export function isPromptTooLongMessage(msg: AssistantMessage): boolean {
       block.type === 'text' &&
       block.text.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE),
   )
+}
+
+function assistantErrorText(msg: AssistantMessage): string {
+  const content = msg.message.content
+  if (!Array.isArray(content)) {
+    return ''
+  }
+  return content
+    .filter(block => block.type === 'text')
+    .map(block => block.text)
+    .join('\n')
+}
+
+export function isStandardContextCreditError(msg: AssistantMessage): boolean {
+  if (!msg.isApiErrorMessage) {
+    return false
+  }
+  return assistantErrorText(msg).includes(EXTRA_USAGE_1M_CONTEXT_MARKER)
+}
+
+/** Errors the query loop should compact-and-continue instead of dying. */
+export function isCompactAndContinueError(msg: AssistantMessage): boolean {
+  return isPromptTooLongMessage(msg) || isStandardContextCreditError(msg)
 }
 
 /**
